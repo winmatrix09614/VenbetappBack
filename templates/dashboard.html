@@ -1,0 +1,75 @@
+@app.get("/dashboard", response_class=HTMLResponse)
+async def admin_dashboard(
+    request: Request,
+    search: str = Query(None),
+    status: str = Query(None),
+    limit_min: int = Query(None),
+    limit_max: int = Query(None),
+    date_filter: str = Query(None),
+    page: int = Query(1),
+    per_page: int = Query(20)
+):
+    if request.cookies.get("admin_auth") != "true":
+        return RedirectResponse(url="/")
+    db = SessionLocal()
+    query = db.query(User)
+    
+    # Поиск
+    if search:
+        query = query.filter(
+            (User.telegram_id.contains(search)) |
+            (User.bet_id.contains(search)) |
+            (User.username.contains(search))
+        )
+    # Фильтр по статусу
+    if status == "active":
+        query = query.filter(User.is_active == True, User.is_banned == False)
+    elif status == "banned":
+        query = query.filter(User.is_banned == True)
+    elif status == "premium":
+        query = query.filter(User.is_premium == True)
+    elif status == "pending":
+        query = query.filter(User.is_active == False, User.is_banned == False)
+    # Фильтр по лимиту
+    if limit_min is not None:
+        query = query.filter(User.attempts_left >= limit_min)
+    if limit_max is not None:
+        query = query.filter(User.attempts_left <= limit_max)
+    # Фильтр по дате регистрации
+    now = datetime.utcnow()
+    if date_filter == "today":
+        start_date = now.replace(hour=0, minute=0, second=0)
+        query = query.filter(User.created_at >= start_date)
+    elif date_filter == "week":
+        start_date = now - timedelta(days=7)
+        query = query.filter(User.created_at >= start_date)
+    elif date_filter == "month":
+        start_date = now - timedelta(days=30)
+        query = query.filter(User.created_at >= start_date)
+    
+    # Общее количество до пагинации
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+    users = query.order_by(User.created_at.desc()).offset(offset).limit(per_page).all()
+    db.close()
+    
+    # Получаем статистику для виджетов
+    stats = get_dashboard_stats()
+    
+    return templates.TemplateResponse("users.html", {
+        "request": request,
+        "users": users,
+        "total_users": stats["total_users"],
+        "active_users": stats["active_users"],
+        "premium_users": stats["premium_users"],
+        "predictions_today": stats["predictions_today"],
+        "page": page,
+        "total_pages": total_pages,
+        "per_page": per_page,
+        "search_query": search or "",
+        "status_filter": status or "",
+        "limit_min": limit_min,
+        "limit_max": limit_max,
+        "date_filter": date_filter or ""
+    })

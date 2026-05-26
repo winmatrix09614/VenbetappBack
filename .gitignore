@@ -1,0 +1,10 @@
+# Secrets and environment variables
+.env
+config.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Database
+*.db

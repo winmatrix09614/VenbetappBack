@@ -1,0 +1,38 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Panel{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; }
+        .sidebar { background: #1a1a2e; min-height: 100vh; }
+        .sidebar a { color: #ddd; text-decoration: none; padding: 10px; display: block; }
+        .sidebar a:hover { background: #0f0f1a; color: white; }
+        .content { padding: 20px; }
+        .table-responsive { background: white; border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-2 sidebar p-0">
+            <div class="p-3">
+                <h5 class="text-white">Админ-панель</h5>
+                <hr class="bg-light">
+                <a href="/dashboard">📊 Пользователи</a>
+                <a href="/logs">📜 Логи прогнозов</a>
+                <a href="/logout" class="text-danger">🚪 Выйти</a>
+            </div>
+        </div>
+        <div class="col-md-10 content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+    
