@@ -820,34 +820,86 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     return response
 
 # ---------- Эндпоинты для WebApp (Mini App) ----------
-if photo:
-    import shutil
-    # Сохраняем файл один раз
-    temp_path = f"temp_{photo.filename}"
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(photo.file, buffer)
+# ---------- Эндпоинты для WebApp (Mini App) ----------
+@app.post("/webapp/predict")
+async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo: UploadFile = File(None)):
+    db = SessionLocal()
+    user = db.query(User).filter(User.bet_id == user_id).first()
+    if not user:
+        db.close()
+        return {"error": "User not found. Please register via /start in Telegram bot."}
+    if not user.is_active or user.is_banned:
+        db.close()
+        return {"error": "Account not active or banned."}
+    if user.attempts_left <= 0:
+        db.close()
+        return {"error": "No attempts left. Contact manager to refill."}
     
-    # Отладка: выводим информацию о файле
-    print(f"📸 Received photo: {photo.filename}, size: {os.path.getsize(temp_path)} bytes")
+    team1 = team2 = None
     
-    try:
-        uploaded = client.files.upload(file=temp_path)
-        prompt = "Extract team names from this screenshot. Return JSON: {\"team1\": \"...\", \"team2\": \"...\"}"
-        response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
-        os.remove(temp_path)
-        text_resp = response.text.strip()
-        json_match = re.search(r'\{.*\}', text_resp, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
-            team1 = data.get("team1", "").strip()
-            team2 = data.get("team2", "").strip()
+    if photo:
+        import shutil
+        temp_path = f"temp_{photo.filename}"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+        try:
+            uploaded = client.files.upload(file=temp_path)
+            prompt = "Extract team names from this screenshot. Return JSON: {\"team1\": \"...\", \"team2\": \"...\"}"
+            response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
+            os.remove(temp_path)
+            text_resp = response.text.strip()
+            json_match = re.search(r'\{.*\}', text_resp, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                team1 = data.get("team1", "").strip()
+                team2 = data.get("team2", "").strip()
+            else:
+                db.close()
+                return {"error": "Could not recognize teams from screenshot."}
+        except Exception as e:
+            print(f"Error processing photo: {e}")
+            db.close()
+            return {"error": "Error processing photo."}
+    elif text:
+        parts = re.split(r'[-–—]', text)
+        if len(parts) >= 2:
+            team1 = parts[0].strip()
+            team2 = parts[1].strip()
         else:
             db.close()
-            return {"error": "Could not recognize teams from screenshot."}
-    except Exception as e:
-        print(f"🔥 Ошибка при обработке фото: {e}")
+            return {"error": "Invalid format. Use 'Team A - Team B'."}
+    else:
         db.close()
-        return {"error": "Error processing photo."}
+        return {"error": "No input."}
+    
+    if not team1 or not team2 or team1 == "Unknown" or team2 == "Unknown":
+        db.close()
+        return {"error": "Could not determine team names."}
+    
+    stats1 = await get_team_stats(team1)
+    stats2 = await get_team_stats(team2)
+    pred = calculate_prediction(stats1, stats2)
+    winner = pred["winner"]
+    confidence = pred["confidence"]
+    analysis_text = await generate_prediction_text(team1, team2, stats1, stats2, winner, confidence)
+    
+    winner_name = team1 if winner == "team1" else (team2 if winner == "team2" else "Ничья")
+    total_over = random.randint(55, 75)
+    corners_over = random.randint(55, 75)
+    additional = f"Тотал голов (2.5): OVER ({total_over}%)\nТотал угловых (9.5): OVER ({corners_over}%)"
+    
+    user.attempts_left -= 1
+    db.commit()
+    full_text = f"Победитель: {winner_name}\nУверенность: {confidence}%\n{analysis_text}"
+    await save_prediction_log(user.telegram_id, f"{team1} - {team2}", winner, confidence, full_text, additional)
+    db.close()
+    
+    return {
+        "prediction": {"winner": winner_name, "confidence": confidence},
+        "additional": additional,
+        "prediction_text": analysis_text
+    }
+
 # Словарь для кэша новостей
 news_cache = {"data": [], "last_update": 0}
 CACHE_TTL = 1800  # 30 минут
@@ -867,16 +919,15 @@ async def webapp_news():
                 "link": entry.link,
                 "pubDate": entry.get("published", datetime.now().isoformat())
             })
-        # Обновляем кэш
         news_cache["data"] = news_list
         news_cache["last_update"] = current_time
         return {"news": news_list}
     except Exception as e:
         print(f"News error: {e}")
-        # В случае ошибки возвращаем данные из кэша или пустой список
         return {"news": news_cache["data"] if news_cache["data"] else []}
 
 # ---------- Новые эндпоинты для фронтенда ----------
+
 @app.get("/user_status")
 async def user_status(bet_id: str):
     db = SessionLocal()
