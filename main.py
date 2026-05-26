@@ -1,4 +1,3 @@
-# bot.py
 import asyncio
 import logging
 import os
@@ -14,13 +13,14 @@ from io import StringIO
 from dotenv import load_dotenv
 load_dotenv()
 
+# Чтение переменных окружения (они уже заданы в Railway)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
 
 if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
     print("⚠️ Предупреждение: не все переменные окружения заданы. Бот может работать некорректно.")
-    
+
 # ---- Google Gemini SDK ----
 from google import genai
 
@@ -470,7 +470,7 @@ app.add_middleware(
 templates = Jinja2Templates(directory="templates")
 os.makedirs("templates", exist_ok=True)
 
-# Базовый шаблон админки
+# Шаблоны админки (создаются автоматически)
 with open("templates/admin_base.html", "w", encoding="utf-8") as f:
     f.write("""
 <!DOCTYPE html>
@@ -511,7 +511,6 @@ with open("templates/admin_base.html", "w", encoding="utf-8") as f:
 </html>
     """)
 
-# Шаблон для пользователей
 with open("templates/users.html", "w", encoding="utf-8") as f:
     f.write("""
 {% extends "admin_base.html" %}
@@ -547,7 +546,8 @@ with open("templates/users.html", "w", encoding="utf-8") as f:
         <table class="table table-bordered table-hover" id="usersTable">
             <thead class="table-dark"><tr><th><input type="checkbox" id="selectAll"></th><th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Username</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th></tr></thead>
             <tbody>{% for u in users %}<tr><td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td><td>{{ u.id }}</td><td>{{ u.telegram_id }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td><td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td><td>{{ '⭐' if u.is_premium else '—' }}</td>
-            <td><div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><input type="number" name="attempts" value="50" style="width:60px; display:inline;"><button type="submit" class="btn btn-warning btn-sm">Акт.</button></form><form method="post" action="/ban" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-danger btn-sm">Бан</button></form><form method="post" action="/premium" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-secondary btn-sm">Premium</button></form></div></td></tr>{% endfor %}</tbody>
+            <td><div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><input type="number" name="attempts" value="50" style="width:60px; display:inline;"><button type="submit" class="btn btn-warning btn-sm">Акт.</button></form><form method="post" action="/ban" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-danger btn-sm">Бан</button></form><form method="post" action="/premium" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-secondary btn-sm">Premium</button></form></div></td>
+            </tr>{% endfor %}</tbody>
         </table>
     </div>
     <div class="row mt-3">
@@ -567,7 +567,6 @@ with open("templates/users.html", "w", encoding="utf-8") as f:
 {% endblock %}
     """)
 
-# Шаблон для логов
 with open("templates/logs.html", "w", encoding="utf-8") as f:
     f.write("""
 {% extends "admin_base.html" %}
@@ -580,7 +579,6 @@ with open("templates/logs.html", "w", encoding="utf-8") as f:
 {% endblock %}
     """)
 
-# Страница логина
 with open("templates/admin.html", "w", encoding="utf-8") as f:
     f.write("""
 <!DOCTYPE html>
@@ -678,7 +676,6 @@ async def approve_user(user_id: int = Form(...), attempts: int = Form(...)):
         user.attempts_left = attempts
         user.confirmed_at = datetime.utcnow()
         db.commit()
-        # Отправляем уведомление только если telegram_id не 0 (не фронт-регистрация)
         if user.telegram_id != 0:
             try:
                 await bot.send_message(user.telegram_id, f"✅ Ваш аккаунт активирован! У вас {attempts} прогнозов.")
@@ -724,7 +721,7 @@ async def logout():
     response.delete_cookie("admin_auth")
     return response
 
-# ---------- Дополнительные эндпоинты (массовые операции, экспорт) ----------
+# ---------- Массовые операции ----------
 @app.post("/mass_give_attempts")
 async def mass_give_attempts(request: Request, data: dict):
     if request.cookies.get("admin_auth") != "true":
@@ -846,7 +843,6 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         temp_path = f"temp_{photo.filename}"
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(photo.file, buffer)
-        print(f"📸 Фото сохранено: {temp_path}, размер: {os.path.getsize(temp_path)} байт")
         try:
             uploaded = client.files.upload(file=temp_path)
             prompt = "Extract team names from this screenshot. Return JSON: {\"team1\": \"...\", \"team2\": \"...\"}"
@@ -858,14 +854,13 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
                 data = json.loads(json_match.group())
                 team1 = data.get("team1", "").strip()
                 team2 = data.get("team2", "").strip()
-                print(f"🔍 Распознано: {team1} vs {team2}")
             else:
                 db.close()
                 return {"error": "Could not recognize teams from screenshot."}
         except Exception as e:
-            print(f"🔥 Ошибка при обработке фото: {e}")
+            print(f"Error processing photo: {e}")
             db.close()
-            return {"error": f"Error processing photo: {str(e)}"}
+            return {"error": "Error processing photo."}
     elif text:
         parts = re.split(r'[-–—]', text)
         if len(parts) >= 2:
@@ -882,7 +877,6 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         db.close()
         return {"error": "Could not determine team names."}
     
-    # Используем реальную статистику (функции get_team_stats, calculate_prediction уже есть)
     stats1 = await get_team_stats(team1)
     stats2 = await get_team_stats(team2)
     pred = calculate_prediction(stats1, stats2)
@@ -907,7 +901,7 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         "prediction_text": analysis_text
     }
 
-# Словарь для кэша новостей
+# Кэш для новостей
 news_cache = {"data": [], "last_update": 0}
 CACHE_TTL = 1800  # 30 минут
 
@@ -916,7 +910,6 @@ async def webapp_news():
     current_time = time.time()
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
-
     try:
         feed = feedparser.parse("https://www.championat.com/rss/news.xml")
         news_list = []
@@ -931,11 +924,43 @@ async def webapp_news():
         return {"news": news_list}
     except Exception as e:
         print(f"News error: {e}")
-        # Возвращаем заглушку, если RSS не работает
-        return {"news": [
-            {"title": "Спартак — Краснодар: прогноз на финал Кубка России", "link": "#", "pubDate": "27 мая 2026"},
-            {"title": "НБА: Леброн Джеймс установил рекорд", "link": "#", "pubDate": "26 мая 2026"}
-        ]}
+        return {"news": news_cache["data"] if news_cache["data"] else []}
+
+# ---------- Новые эндпоинты для фронтенда ----------
+@app.get("/user_status")
+async def user_status(bet_id: str):
+    db = SessionLocal()
+    user = db.query(User).filter(User.bet_id == bet_id).first()
+    db.close()
+    if not user:
+        return {"status": "not_found"}
+    return {
+        "status": "active" if (user.is_active and not user.is_banned) else ("banned" if user.is_banned else "pending"),
+        "attempts": user.attempts_left if (user.is_active and not user.is_banned) else 0
+    }
+
+@app.post("/register_request")
+async def register_request(bet_id: str):
+    db = SessionLocal()
+    user = db.query(User).filter(User.bet_id == bet_id).first()
+    if not user:
+        new_user = User(telegram_id=0, bet_id=bet_id, attempts_left=0, is_active=False, is_banned=False)
+        db.add(new_user)
+        db.commit()
+    db.close()
+    return {"status": "ok"}
+
+@app.get("/user_history")
+async def user_history(bet_id: str):
+    db = SessionLocal()
+    user = db.query(User).filter(User.bet_id == bet_id).first()
+    if not user:
+        db.close()
+        return {"history": []}
+    logs = db.query(PredictionLog).filter(PredictionLog.user_id == user.id).order_by(PredictionLog.created_at.desc()).all()
+    db.close()
+    history = [{"created_at": log.created_at.isoformat(), "match_description": log.match_description, "winner": log.winner, "confidence": log.confidence} for log in logs]
+    return {"history": history}
 
 # ---------- Запуск ----------
 async def start_bot():
