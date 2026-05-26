@@ -456,7 +456,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://prognosist-front-production.up.railway.app"],
+    allow_origins=["https://venbetapp-production.up.railway.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
