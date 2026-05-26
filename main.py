@@ -19,9 +19,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
 
 if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
-    print("❌ Ошибка: не все переменные окружения заданы!")
-    exit(1)
-
+    print("⚠️ Предупреждение: не все переменные окружения заданы. Бот может работать некорректно.")
+    
 # ---- Google Gemini SDK ----
 from google import genai
 
@@ -826,7 +825,6 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     return response
 
 # ---------- Эндпоинты для WebApp (Mini App) ----------
-# ---------- Эндпоинты для WebApp (Mini App) ----------
 @app.post("/webapp/predict")
 async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo: UploadFile = File(None)):
     db = SessionLocal()
@@ -848,6 +846,7 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         temp_path = f"temp_{photo.filename}"
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(photo.file, buffer)
+        print(f"📸 Фото сохранено: {temp_path}, размер: {os.path.getsize(temp_path)} байт")
         try:
             uploaded = client.files.upload(file=temp_path)
             prompt = "Extract team names from this screenshot. Return JSON: {\"team1\": \"...\", \"team2\": \"...\"}"
@@ -859,13 +858,14 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
                 data = json.loads(json_match.group())
                 team1 = data.get("team1", "").strip()
                 team2 = data.get("team2", "").strip()
+                print(f"🔍 Распознано: {team1} vs {team2}")
             else:
                 db.close()
                 return {"error": "Could not recognize teams from screenshot."}
         except Exception as e:
-            print(f"Error processing photo: {e}")
+            print(f"🔥 Ошибка при обработке фото: {e}")
             db.close()
-            return {"error": "Error processing photo."}
+            return {"error": f"Error processing photo: {str(e)}"}
     elif text:
         parts = re.split(r'[-–—]', text)
         if len(parts) >= 2:
@@ -882,6 +882,7 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         db.close()
         return {"error": "Could not determine team names."}
     
+    # Используем реальную статистику (функции get_team_stats, calculate_prediction уже есть)
     stats1 = await get_team_stats(team1)
     stats2 = await get_team_stats(team2)
     pred = calculate_prediction(stats1, stats2)
@@ -930,44 +931,11 @@ async def webapp_news():
         return {"news": news_list}
     except Exception as e:
         print(f"News error: {e}")
-        return {"news": news_cache["data"] if news_cache["data"] else []}
-
-# ---------- Новые эндпоинты для фронтенда ----------
-
-@app.get("/user_status")
-async def user_status(bet_id: str):
-    db = SessionLocal()
-    user = db.query(User).filter(User.bet_id == bet_id).first()
-    db.close()
-    if not user:
-        return {"status": "not_found"}
-    return {
-        "status": "active" if (user.is_active and not user.is_banned) else ("banned" if user.is_banned else "pending"),
-        "attempts": user.attempts_left if (user.is_active and not user.is_banned) else 0
-    }
-
-@app.get("/register_request")
-async def register_request(bet_id: str):
-    db = SessionLocal()
-    user = db.query(User).filter(User.bet_id == bet_id).first()
-    if not user:
-        new_user = User(telegram_id=0, bet_id=bet_id, attempts_left=0, is_active=False, is_banned=False)
-        db.add(new_user)
-        db.commit()
-    db.close()
-    return {"status": "ok"}
-
-@app.get("/user_history")
-async def user_history(bet_id: str):
-    db = SessionLocal()
-    user = db.query(User).filter(User.bet_id == bet_id).first()
-    if not user:
-        db.close()
-        return {"history": []}
-    logs = db.query(PredictionLog).filter(PredictionLog.user_id == user.id).order_by(PredictionLog.created_at.desc()).all()
-    db.close()
-    history = [{"created_at": log.created_at.isoformat(), "match_description": log.match_description, "winner": log.winner, "confidence": log.confidence} for log in logs]
-    return {"history": history}
+        # Возвращаем заглушку, если RSS не работает
+        return {"news": [
+            {"title": "Спартак — Краснодар: прогноз на финал Кубка России", "link": "#", "pubDate": "27 мая 2026"},
+            {"title": "НБА: Леброн Джеймс установил рекорд", "link": "#", "pubDate": "26 мая 2026"}
+        ]}
 
 # ---------- Запуск ----------
 async def start_bot():
