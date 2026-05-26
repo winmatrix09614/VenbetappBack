@@ -13,7 +13,7 @@ from io import StringIO
 from dotenv import load_dotenv
 load_dotenv()
 
-# Чтение переменных окружения (они уже заданы в Railway)
+# Чтение переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
@@ -903,7 +903,7 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
 
 # Кэш для новостей
 news_cache = {"data": [], "last_update": 0}
-CACHE_TTL = 1800  # 30 минут
+CACHE_TTL = 1800
 
 @app.get("/webapp/news")
 async def webapp_news():
@@ -939,7 +939,7 @@ async def user_status(bet_id: str):
         "attempts": user.attempts_left if (user.is_active and not user.is_banned) else 0
     }
 
-@app.post("/register_request")
+@app.get("/register_request")
 async def register_request(bet_id: str):
     db = SessionLocal()
     user = db.query(User).filter(User.bet_id == bet_id).first()
