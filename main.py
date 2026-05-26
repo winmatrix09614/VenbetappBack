@@ -14,7 +14,13 @@ from io import StringIO
 from dotenv import load_dotenv
 load_dotenv()
 
-from config import BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
+
+if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
+    print("❌ Ошибка: не все переменные окружения заданы!")
+    exit(1)
 
 # ---- Google Gemini SDK ----
 from google import genai
