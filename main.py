@@ -6,6 +6,7 @@ import json
 import random
 import time
 import csv
+import cloudscraper
 from datetime import datetime, timedelta
 from collections import OrderedDict
 from io import StringIO
@@ -883,47 +884,51 @@ async def webapp_news():
     current_time = time.time()
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
-    
+
     try:
-        # Первый RSS-источник (спортбокс)
-        rss_url = "https://news.sportbox.ru/rss"
-        req = feedparser.http.Request()
-        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        feed = feedparser.parse(rss_url, request=req)
-        
-        if feed.entries:
-            news_list = []
-            for entry in feed.entries[:10]:
-                news_list.append({
-                    "title": entry.title,
-                    "link": entry.link,
-                    "pubDate": entry.get("published", datetime.now().isoformat())
-                })
-            news_cache["data"] = news_list
-            news_cache["last_update"] = current_time
-            return {"news": news_list}
-        
-        # Резервный источник (sports.ru)
-        rss_url2 = "https://www.sports.ru/rss/"
-        feed2 = feedparser.parse(rss_url2, request=req)
-        if feed2.entries:
-            news_list = []
-            for entry in feed2.entries[:10]:
-                news_list.append({
-                    "title": entry.title,
-                    "link": entry.link,
-                    "pubDate": entry.get("published", datetime.now().isoformat())
-                })
-            news_cache["data"] = news_list
-            news_cache["last_update"] = current_time
-            return {"news": news_list}
-        
-        # Если оба источника не дали новостей
+        # Создаем "браузер" для обхода защиты
+        scraper = cloudscraper.create_scraper()
+        # Используем современный User-Agent
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+
+        # Список RSS-лент для повышения надежности
+        rss_urls = [
+            "https://news.sportbox.ru/rss",
+            "https://www.sports.ru/rss/",
+            "https://www.sport-express.ru/rss/"
+        ]
+
+        for rss_url in rss_urls:
+            try:
+                # Делаем запрос через cloudscraper
+                response = scraper.get(rss_url, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    # Парсим полученный XML
+                    feed = feedparser.parse(response.text)
+                    if feed.entries:
+                        news_list = []
+                        for entry in feed.entries[:10]:
+                            news_list.append({
+                                "title": entry.title,
+                                "link": entry.link,
+                                "pubDate": entry.get("published", datetime.now().isoformat())
+                            })
+                        # Если успешно получили новости, сохраняем в кэш и возвращаем
+                        news_cache["data"] = news_list
+                        news_cache["last_update"] = current_time
+                        return {"news": news_list}
+            except Exception as e:
+                print(f"Error fetching RSS from {rss_url}: {e}")
+                continue
+
+        # Если ни один источник не сработал, возвращаем кэш или пустой список
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
     except Exception as e:
-        print(f"News error: {e}")
+        print(f"Final error in news endpoint: {e}")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
