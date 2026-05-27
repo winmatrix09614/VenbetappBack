@@ -13,16 +13,21 @@ from io import StringIO
 from dotenv import load_dotenv
 load_dotenv()
 
+# ---------- Переменные окружения ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")   # <--- НОВАЯ ПЕРЕМЕННАЯ
 
 if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
-    print("⚠️ Предупреждение: не все переменные окружения заданы. Бот может работать некорректно.")
+    print("⚠️ Предупреждение: не все основные переменные окружения заданы. Бот может работать некорректно.")
 
+# ---- Google Gemini SDK ----
 from google import genai
+
 import requests
 import feedparser
+import httpx   # <--- ДЛЯ НОВОСТЕЙ
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -43,7 +48,7 @@ import uvicorn
 client = genai.Client(api_key=GEMINI_API_KEY)
 MODEL_NAME = "gemini-2.5-flash"
 
-# ---------- Кэш для статистики ----------
+# ---------- Кэш для статистики команд ----------
 team_stats_cache = OrderedDict()
 CACHE_TTL = 3600
 
@@ -109,6 +114,7 @@ def get_main_keyboard(attempts: int) -> ReplyKeyboardMarkup:
         resize_keyboard=True
     )
 
+# ---------- Вспомогательные функции (скачивание фото, распознавание, статистика) ----------
 async def download_photo(file_id: str) -> str:
     file = await bot.get_file(file_id)
     file_path = f"temp_{file_id}.jpg"
@@ -397,7 +403,7 @@ async def process_match_text(message: types.Message, state: FSMContext):
 
 @dp.message(F.text == "📰 Новости")
 async def news(message: types.Message):
-    feed = feedparser.parse("https://www.championat.com/rss/news.xml")
+    feed = feedparser.parse("https://news.sportbox.ru/rss")  # заглушка, но фактически новости через API
     if not feed.entries:
         await message.answer("Новости временно недоступны.")
         return
@@ -425,7 +431,7 @@ async def news_callback(callback: types.CallbackQuery):
     await callback.answer()
     await news(callback.message)
 
-# ---------- FastAPI админ-панель и API ----------
+# ---------- FastAPI приложение ----------
 app = FastAPI()
 
 app.add_middleware(
@@ -870,44 +876,56 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         "prediction_text": analysis_text
     }
 
-# Кэш для новостей
-news_cache = {"data": [], "last_update": 0}
+# ---------- Новости через NewsAPI ----------
+news_cache = {"data": [], "timestamp": 0}
 CACHE_TTL = 1800
 
 @app.get("/webapp/news")
-async def webapp_news():
+async def get_news():
     current_time = time.time()
-    if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
+    if current_time - news_cache["timestamp"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
-    try:
-        # Используем более надежный RSS-источник (об этом дальше)
-        feed_url = "https://www.sport-express.ru/rss/"
-        feed = feedparser.parse(feed_url)
+    
+    if not NEWS_API_KEY:
+        return {"news": [
+            {"title": "Настройте NEWS_API_KEY в переменных окружения", "link": "#", "pubDate": datetime.now().isoformat()}
+        ]}
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            params = {
+                "apiKey": NEWS_API_KEY,
+                "category": "sports",
+                "language": "ru",
+                "pageSize": 10,
+                "country": "ru"
+            }
+            response = await client.get("https://newsapi.org/v2/top-headlines", params=params)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("status") == "ok" and data.get("articles"):
+                news_list = []
+                for article in data["articles"]:
+                    news_list.append({
+                        "title": article.get("title", "Без заголовка"),
+                        "link": article.get("url", "#"),
+                        "pubDate": article.get("publishedAt", datetime.now().isoformat())
+                    })
+                news_cache["data"] = news_list
+                news_cache["timestamp"] = current_time
+                return {"news": news_list}
+            else:
+                print(f"NewsAPI error: {data.get('message', 'Unknown error')}")
+                if news_cache["data"]:
+                    return {"news": news_cache["data"]}
+                return {"news": []}
+        except Exception as e:
+            print(f"News request error: {e}")
+            if news_cache["data"]:
+                return {"news": news_cache["data"]}
+            return {"news": []}
 
-        # Добавим отладочную информацию
-        print(f"[DEBUG] Parsing feed from: {feed_url}")
-        print(f"[DEBUG] Feed status: {feed.get('status', 'unknown')}")
-        print(f"[DEBUG] Feed entries count: {len(feed.entries)}")
-        if feed.entries:
-            print(f"[DEBUG] First entry title: {feed.entries[0].get('title', 'no title')}")
-
-        news_list = []
-        for entry in feed.entries[:10]:
-            news_list.append({
-                "title": entry.title,
-                "link": entry.link,
-                "pubDate": entry.get("published", datetime.now().isoformat())
-            })
-        news_cache["data"] = news_list
-        news_cache["last_update"] = current_time
-        return {"news": news_list}
-    except Exception as e:
-        print(f"[ERROR] News parsing failed: {e}")
-        if news_cache["data"]:
-            return {"news": news_cache["data"]}
-        return {"news": []}
-
-# ---------- Эндпоинты для фронтенда ----------
+# ---------- Эндпоинты для фронтенда (статус, регистрация, история) ----------
 @app.get("/user_status")
 async def user_status(bet_id: str):
     db = SessionLocal()

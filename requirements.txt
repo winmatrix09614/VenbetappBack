@@ -9,3 +9,4 @@ requests
 feedparser
 beautifulsoup4
 python-multipart
+httpx==0.27.0
