@@ -880,8 +880,17 @@ async def webapp_news():
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
     try:
-        # Заменим на sports.ru RSS (работает без CORS)
-        feed = feedparser.parse("https://www.sports.ru/rss/")
+        # Используем более надежный RSS-источник (об этом дальше)
+        feed_url = "https://www.sport-express.ru/rss/"
+        feed = feedparser.parse(feed_url)
+
+        # Добавим отладочную информацию
+        print(f"[DEBUG] Parsing feed from: {feed_url}")
+        print(f"[DEBUG] Feed status: {feed.get('status', 'unknown')}")
+        print(f"[DEBUG] Feed entries count: {len(feed.entries)}")
+        if feed.entries:
+            print(f"[DEBUG] First entry title: {feed.entries[0].get('title', 'no title')}")
+
         news_list = []
         for entry in feed.entries[:10]:
             news_list.append({
@@ -893,14 +902,10 @@ async def webapp_news():
         news_cache["last_update"] = current_time
         return {"news": news_list}
     except Exception as e:
-        print(f"News error: {e}")
-        # Если ошибка, возвращаем старые кэшированные данные или заглушку
+        print(f"[ERROR] News parsing failed: {e}")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
-        return {"news": [
-            {"title": "Чемпионат мира 2026: расписание матчей", "link": "#", "pubDate": "27 мая 2026"},
-            {"title": "Лига чемпионов: финал уже близко", "link": "#", "pubDate": "26 мая 2026"}
-        ]}
+        return {"news": []}
 
 # ---------- Эндпоинты для фронтенда ----------
 @app.get("/user_status")
