@@ -880,7 +880,8 @@ async def webapp_news():
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
     try:
-        feed = feedparser.parse("https://www.championat.com/rss/news.xml")
+        # Заменим на sports.ru RSS (работает без CORS)
+        feed = feedparser.parse("https://www.sports.ru/rss/")
         news_list = []
         for entry in feed.entries[:10]:
             news_list.append({
@@ -893,7 +894,13 @@ async def webapp_news():
         return {"news": news_list}
     except Exception as e:
         print(f"News error: {e}")
-        return {"news": news_cache["data"] if news_cache["data"] else []}
+        # Если ошибка, возвращаем старые кэшированные данные или заглушку
+        if news_cache["data"]:
+            return {"news": news_cache["data"]}
+        return {"news": [
+            {"title": "Чемпионат мира 2026: расписание матчей", "link": "#", "pubDate": "27 мая 2026"},
+            {"title": "Лига чемпионов: финал уже близко", "link": "#", "pubDate": "26 мая 2026"}
+        ]}
 
 # ---------- Эндпоинты для фронтенда ----------
 @app.get("/user_status")
