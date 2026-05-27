@@ -882,31 +882,30 @@ CACHE_TTL = 1800  # 30 минут
 @app.get("/webapp/news")
 async def webapp_news():
     current_time = time.time()
+    print(f"[DEBUG] News endpoint called at {current_time}")
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
+        print(f"[DEBUG] Returning cached news, count: {len(news_cache['data'])}")
         return {"news": news_cache["data"]}
-
+    
     try:
-        # Создаем "браузер" для обхода защиты
+        import cloudscraper
         scraper = cloudscraper.create_scraper()
-        # Используем современный User-Agent
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
-
-        # Список RSS-лент для повышения надежности
         rss_urls = [
             "https://news.sportbox.ru/rss",
             "https://www.sports.ru/rss/",
             "https://www.sport-express.ru/rss/"
         ]
-
-        for rss_url in rss_urls:
+        for idx, rss_url in enumerate(rss_urls):
+            print(f"[DEBUG] Trying RSS #{idx+1}: {rss_url}")
             try:
-                # Делаем запрос через cloudscraper
                 response = scraper.get(rss_url, headers=headers, timeout=15)
+                print(f"[DEBUG] Response status: {response.status_code}")
                 if response.status_code == 200:
-                    # Парсим полученный XML
                     feed = feedparser.parse(response.text)
+                    print(f"[DEBUG] Feed entries count: {len(feed.entries)}")
                     if feed.entries:
                         news_list = []
                         for entry in feed.entries[:10]:
@@ -915,20 +914,49 @@ async def webapp_news():
                                 "link": entry.link,
                                 "pubDate": entry.get("published", datetime.now().isoformat())
                             })
-                        # Если успешно получили новости, сохраняем в кэш и возвращаем
                         news_cache["data"] = news_list
                         news_cache["last_update"] = current_time
+                        print(f"[DEBUG] Success, returning {len(news_list)} news items")
+                        return {"news": news_list}
+                    else:
+                        print(f"[DEBUG] No entries in feed")
+                else:
+                    print(f"[DEBUG] HTTP error: {response.status_code}")
+            except Exception as e:
+                print(f"[DEBUG] Exception for {rss_url}: {type(e).__name__}: {e}")
+                continue
+        
+        # Если ничего не вышло, пробуем requests как fallback (без cloudscraper)
+        print("[DEBUG] Trying fallback with requests")
+        import requests
+        for rss_url in rss_urls:
+            try:
+                resp = requests.get(rss_url, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    feed = feedparser.parse(resp.text)
+                    if feed.entries:
+                        news_list = []
+                        for entry in feed.entries[:10]:
+                            news_list.append({
+                                "title": entry.title,
+                                "link": entry.link,
+                                "pubDate": entry.get("published", datetime.now().isoformat())
+                            })
+                        news_cache["data"] = news_list
+                        news_cache["last_update"] = current_time
+                        print(f"[DEBUG] Fallback success, returning {len(news_list)} items")
                         return {"news": news_list}
             except Exception as e:
-                print(f"Error fetching RSS from {rss_url}: {e}")
+                print(f"[DEBUG] Fallback exception for {rss_url}: {e}")
                 continue
-
-        # Если ни один источник не сработал, возвращаем кэш или пустой список
+        
+        # Если всё совсем плохо, возвращаем заглушку
+        print("[DEBUG] All sources failed, returning empty news list")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
     except Exception as e:
-        print(f"Final error in news endpoint: {e}")
+        print(f"[DEBUG] Top-level exception: {type(e).__name__}: {e}")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
