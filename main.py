@@ -888,71 +888,76 @@ async def webapp_news():
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
-    # Список источников: URL и функция извлечения новостей
-    sources = [
-        {
-            "url": "https://www.sport-express.ru/",
-            "name": "sport-express",
-            "parse": lambda soup: [
-                {"title": a.get_text(strip=True), "link": a.get('href')}
-                for a in soup.select('a.news-list__item-link')[:10]
-                if a.get_text(strip=True) and a.get('href')
-            ]
-        },
-        {
-            "url": "https://www.sports.ru/",
-            "name": "sports.ru",
-            "parse": lambda soup: [
-                {"title": a.get_text(strip=True), "link": a.get('href')}
-                for a in soup.select('a.feed__link')[:10]
-                if a.get_text(strip=True) and a.get('href')
-            ]
-        },
-        {
-            "url": "https://news.sportbox.ru/",
-            "name": "sportbox",
-            "parse": lambda soup: [
-                {"title": a.get_text(strip=True), "link": a.get('href')}
-                for a in soup.select('a.item__title-link')[:10]
-                if a.get_text(strip=True) and a.get('href')
-            ]
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
-    ]
-    
-    news_list = []
-    
-    for source in sources:
+        
+        news_list = []
+        
+        # 1. Пробуем sportbox.ru (главная страница)
         try:
-            response = requests.get(source["url"], headers=headers, timeout=15)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                items = source["parse"](soup)
-                for item in items:
-                    # Обработка относительных ссылок
-                    link = item["link"]
+            url = "https://news.sportbox.ru"
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                # Ищем блоки новостей (селекторы могут меняться, но подберём универсальные)
+                items = soup.select('.news-list__item a, .main-news__item a, .short-news__item a')
+                for item in items[:10]:
+                    title = item.get_text(strip=True)
+                    link = item.get('href')
                     if link and not link.startswith('http'):
-                        from urllib.parse import urljoin
-                        link = urljoin(source["url"], link)
-                    news_list.append({
-                        "title": item["title"],
-                        "link": link,
-                        "pubDate": datetime.now().isoformat()
-                    })
-                if len(news_list) >= 10:
-                    break
+                        link = "https://news.sportbox.ru" + link
+                    if title and len(title) > 10:
+                        news_list.append({
+                            "title": title,
+                            "link": link,
+                            "pubDate": datetime.now().isoformat()
+                        })
+                if news_list:
+                    print(f"Sportbox: {len(news_list)} news")
         except Exception as e:
-            print(f"Error parsing {source['name']}: {e}")
-            continue
-    
-    if news_list:
-        news_cache["data"] = news_list[:10]
-        news_cache["last_update"] = current_time
-        return {"news": news_cache["data"]}
-    else:
+            print(f"Sportbox error: {e}")
+        
+        # 2. Если нет, пробуем sports.ru
+        if not news_list:
+            try:
+                url = "https://www.sports.ru/"
+                resp = requests.get(url, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, 'html.parser')
+                    items = soup.select('.news-feed__item a, .material__title a')
+                    for item in items[:10]:
+                        title = item.get_text(strip=True)
+                        link = item.get('href')
+                        if link and not link.startswith('http'):
+                            link = "https://www.sports.ru" + link
+                        if title and len(title) > 10:
+                            news_list.append({
+                                "title": title,
+                                "link": link,
+                                "pubDate": datetime.now().isoformat()
+                            })
+                    print(f"Sports.ru: {len(news_list)} news")
+            except Exception as e:
+                print(f"Sports.ru error: {e}")
+        
+        # 3. Если всё ещё нет, возвращаем заглушку
+        if news_list:
+            news_cache["data"] = news_list
+            news_cache["last_update"] = current_time
+            return {"news": news_list}
+        else:
+            if news_cache["data"]:
+                return {"news": news_cache["data"]}
+            return {"news": [
+                {"title": "Новости временно недоступны", "link": "#", "pubDate": datetime.now().isoformat()}
+            ]}
+    except Exception as e:
+        print(f"News error: {e}")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
