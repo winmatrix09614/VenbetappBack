@@ -885,48 +885,51 @@ CACHE_TTL = 1800  # 30 минут
 @app.get("/webapp/news")
 async def webapp_news():
     current_time = time.time()
+    # Возвращаем из кэша, если он свежий (30 минут)
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
     
     try:
-        import httpx
-        rss_feed_urls = [
-            "https://news.sportbox.ru/rss",
-            "https://www.sports.ru/rss/",
-            "https://www.sport-express.ru/rss/"
-        ]
-        async with httpx.AsyncClient() as client:
-            for rss_url in rss_feed_urls:
-                try:
-                    # Используем бесплатный прокси rss2json.com
-                    proxy_url = f"https://api.rss2json.com/v1/api.json?rss_url={rss_url}"
-                    response = await client.get(proxy_url, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get('status') == 'ok' and data.get('items'):
-                            news_list = []
-                            for item in data['items'][:10]:
-                                news_list.append({
-                                    "title": item.get('title', 'Без заголовка'),
-                                    "link": item.get('link', '#'),
-                                    "pubDate": item.get('pubDate', datetime.now().isoformat())
-                                })
-                            news_cache["data"] = news_list
-                            news_cache["last_update"] = current_time
-                            print(f"News loaded from {rss_url}, count: {len(news_list)}")
-                            return {"news": news_list}
-                except Exception as e:
-                    print(f"Proxy error for {rss_url}: {e}")
-                    continue
+        # Google News RSS для спорта (испанский язык, Латинская Америка)
+        rss_url = "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=es-419&gl=US&ceid=US:es-419"
         
-        # Если ничего не получилось, возвращаем заглушку или старый кэш
-        if news_cache["data"]:
-            return {"news": news_cache["data"]}
-        return {"news": [
-            {"title": "Новости временно недоступны", "link": "#", "pubDate": datetime.now().isoformat()}
-        ]}
+        # Можно также попробовать английский:
+        # rss_url = "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=en-US&gl=US&ceid=US:en"
+        
+        # Парсим RSS через feedparser (без сложных заголовков)
+        import feedparser
+        feed = feedparser.parse(rss_url)
+        
+        news_list = []
+        for entry in feed.entries[:15]:  # Берём 15 последних новостей
+            # Извлекаем картинку (Google RSS часто даёт media:thumbnail)
+            image_url = None
+            if 'media_thumbnail' in entry:
+                image_url = entry.media_thumbnail[0]['url']
+            elif 'links' in entry:
+                # Пробуем взять первую картинку из описания (не обязательно)
+                pass
+            
+            news_list.append({
+                "title": entry.title,
+                "link": entry.link,
+                "pubDate": entry.get("published", datetime.now().isoformat()),
+                "image": image_url,  # может быть None
+                "source": entry.get("source", {}).get("title", "Google News")
+            })
+        
+        if news_list:
+            news_cache["data"] = news_list
+            news_cache["last_update"] = current_time
+            print(f"[NEWS] Updated {len(news_list)} news from Google RSS")
+            return {"news": news_list}
+        else:
+            # Если не получили новости, возвращаем кэш или пустой список
+            if news_cache["data"]:
+                return {"news": news_cache["data"]}
+            return {"news": []}
     except Exception as e:
-        print(f"News error: {e}")
+        print(f"[NEWS] Error: {e}")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
