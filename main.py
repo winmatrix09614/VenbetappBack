@@ -17,7 +17,6 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")   # <--- НОВАЯ ПЕРЕМЕННАЯ
 
 if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
     print("⚠️ Предупреждение: не все основные переменные окружения заданы. Бот может работать некорректно.")
@@ -27,7 +26,6 @@ from google import genai
 
 import requests
 import feedparser
-import httpx   # <--- ДЛЯ НОВОСТЕЙ
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -876,54 +874,59 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         "prediction_text": analysis_text
     }
 
-# ---------- Новости через NewsAPI ----------
-news_cache = {"data": [], "timestamp": 0}
-CACHE_TTL = 1800
+# Кэш для новостей (поместите в начало файла, где объявляются другие кэши)
+news_cache = {"data": [], "last_update": 0}
+CACHE_TTL = 1800  # 30 минут
 
 @app.get("/webapp/news")
-async def get_news():
+async def webapp_news():
     current_time = time.time()
-    if current_time - news_cache["timestamp"] < CACHE_TTL and news_cache["data"]:
+    if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
     
-    if not NEWS_API_KEY:
-        return {"news": [
-            {"title": "Настройте NEWS_API_KEY в переменных окружения", "link": "#", "pubDate": datetime.now().isoformat()}
-        ]}
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            params = {
-                "apiKey": NEWS_API_KEY,
-                "category": "sports",
-                "language": "ru",
-                "pageSize": 10,
-                "country": "ru"
-            }
-            response = await client.get("https://newsapi.org/v2/top-headlines", params=params)
-            response.raise_for_status()
-            data = response.json()
-            if data.get("status") == "ok" and data.get("articles"):
-                news_list = []
-                for article in data["articles"]:
-                    news_list.append({
-                        "title": article.get("title", "Без заголовка"),
-                        "link": article.get("url", "#"),
-                        "pubDate": article.get("publishedAt", datetime.now().isoformat())
-                    })
-                news_cache["data"] = news_list
-                news_cache["timestamp"] = current_time
-                return {"news": news_list}
-            else:
-                print(f"NewsAPI error: {data.get('message', 'Unknown error')}")
-                if news_cache["data"]:
-                    return {"news": news_cache["data"]}
-                return {"news": []}
-        except Exception as e:
-            print(f"News request error: {e}")
-            if news_cache["data"]:
-                return {"news": news_cache["data"]}
-            return {"news": []}
+    try:
+        # Первый RSS-источник (спортбокс)
+        rss_url = "https://news.sportbox.ru/rss"
+        req = feedparser.http.Request()
+        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        feed = feedparser.parse(rss_url, request=req)
+        
+        if feed.entries:
+            news_list = []
+            for entry in feed.entries[:10]:
+                news_list.append({
+                    "title": entry.title,
+                    "link": entry.link,
+                    "pubDate": entry.get("published", datetime.now().isoformat())
+                })
+            news_cache["data"] = news_list
+            news_cache["last_update"] = current_time
+            return {"news": news_list}
+        
+        # Резервный источник (sports.ru)
+        rss_url2 = "https://www.sports.ru/rss/"
+        feed2 = feedparser.parse(rss_url2, request=req)
+        if feed2.entries:
+            news_list = []
+            for entry in feed2.entries[:10]:
+                news_list.append({
+                    "title": entry.title,
+                    "link": entry.link,
+                    "pubDate": entry.get("published", datetime.now().isoformat())
+                })
+            news_cache["data"] = news_list
+            news_cache["last_update"] = current_time
+            return {"news": news_list}
+        
+        # Если оба источника не дали новостей
+        if news_cache["data"]:
+            return {"news": news_cache["data"]}
+        return {"news": []}
+    except Exception as e:
+        print(f"News error: {e}")
+        if news_cache["data"]:
+            return {"news": news_cache["data"]}
+        return {"news": []}
 
 # ---------- Эндпоинты для фронтенда (статус, регистрация, история) ----------
 @app.get("/user_status")
