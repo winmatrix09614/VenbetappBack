@@ -885,51 +885,39 @@ CACHE_TTL = 1800  # 30 минут
 @app.get("/webapp/news")
 async def webapp_news():
     current_time = time.time()
-    # Возвращаем из кэша, если он свежий (30 минут)
     if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
-    
+
     try:
-        # Google News RSS для спорта (испанский язык, Латинская Америка)
+        # Если у вас уже есть код получения RSS - используйте его.
+        # Здесь пример с Google News RSS (испанский).
         rss_url = "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=es-419&gl=US&ceid=US:es-419"
-        
-        # Можно также попробовать английский:
-        # rss_url = "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=en-US&gl=US&ceid=US:en"
-        
-        # Парсим RSS через feedparser (без сложных заголовков)
-        import feedparser
         feed = feedparser.parse(rss_url)
         
         news_list = []
-        for entry in feed.entries[:15]:  # Берём 15 последних новостей
-            # Извлекаем картинку (Google RSS часто даёт media:thumbnail)
-            image_url = None
-            if 'media_thumbnail' in entry:
-                image_url = entry.media_thumbnail[0]['url']
-            elif 'links' in entry:
-                # Пробуем взять первую картинку из описания (не обязательно)
-                pass
+        for entry in feed.entries[:15]:  # Берём 15 новостей
+            # Берём описание (summary) или description, если нет summary
+            description = entry.get('summary', entry.get('description', ''))
+            # Удаляем HTML-теги из описания (они там часто есть)
+            if description:
+                import re
+                description = re.sub(r'<.*?>', '', description)
+                # Обрезаем до 120 символов + многоточие
+                if len(description) > 120:
+                    description = description[:117] + '...'
             
             news_list.append({
                 "title": entry.title,
                 "link": entry.link,
-                "pubDate": entry.get("published", datetime.now().isoformat()),
-                "image": image_url,  # может быть None
-                "source": entry.get("source", {}).get("title", "Google News")
+                "pubDate": entry.get('published', datetime.now().isoformat()),
+                "description": description if description else "Нет описания"
             })
         
-        if news_list:
-            news_cache["data"] = news_list
-            news_cache["last_update"] = current_time
-            print(f"[NEWS] Updated {len(news_list)} news from Google RSS")
-            return {"news": news_list}
-        else:
-            # Если не получили новости, возвращаем кэш или пустой список
-            if news_cache["data"]:
-                return {"news": news_cache["data"]}
-            return {"news": []}
+        news_cache["data"] = news_list
+        news_cache["last_update"] = current_time
+        return {"news": news_list}
     except Exception as e:
-        print(f"[NEWS] Error: {e}")
+        print(f"News error: {e}")
         if news_cache["data"]:
             return {"news": news_cache["data"]}
         return {"news": []}
