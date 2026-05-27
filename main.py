@@ -930,37 +930,52 @@ async def webapp_news():
 @app.get("/user_status")
 async def user_status(bet_id: str):
     db = SessionLocal()
-    user = db.query(User).filter(User.bet_id == bet_id).first()
-    db.close()
-    if not user:
-        return {"status": "not_found"}
-    return {
-        "status": "active" if (user.is_active and not user.is_banned) else ("banned" if user.is_banned else "pending"),
-        "attempts": user.attempts_left if (user.is_active and not user.is_banned) else 0
-    }
+    try:
+        user = db.query(User).filter(User.bet_id == bet_id).first()
+        if not user:
+            return {"status": "not_found"}
+        return {
+            "status": "active" if (user.is_active and not user.is_banned) else ("banned" if user.is_banned else "pending"),
+            "attempts": user.attempts_left if (user.is_active and not user.is_banned) else 0
+        }
+    finally:
+        db.close()
 
 @app.get("/register_request")
 async def register_request(bet_id: str):
     db = SessionLocal()
-    user = db.query(User).filter(User.bet_id == bet_id).first()
-    if not user:
-        new_user = User(telegram_id=0, bet_id=bet_id, attempts_left=0, is_active=False, is_banned=False)
-        db.add(new_user)
-        db.commit()
-    db.close()
-    return {"status": "ok"}
+    try:
+        # Проверяем, существует ли уже пользователь
+        user = db.query(User).filter(User.bet_id == bet_id).first()
+        if not user:
+            new_user = User(
+                telegram_id=0,
+                bet_id=bet_id,
+                attempts_left=0,
+                is_active=False,
+                is_banned=False
+            )
+            db.add(new_user)
+            db.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Register error: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
 
 @app.get("/user_history")
 async def user_history(bet_id: str):
     db = SessionLocal()
-    user = db.query(User).filter(User.bet_id == bet_id).first()
-    if not user:
+    try:
+        user = db.query(User).filter(User.bet_id == bet_id).first()
+        if not user:
+            return {"history": []}
+        logs = db.query(PredictionLog).filter(PredictionLog.user_id == user.id).order_by(PredictionLog.created_at.desc()).all()
+        history = [{"created_at": log.created_at.isoformat(), "match_description": log.match_description, "winner": log.winner, "confidence": log.confidence} for log in logs]
+        return {"history": history}
+    finally:
         db.close()
-        return {"history": []}
-    logs = db.query(PredictionLog).filter(PredictionLog.user_id == user.id).order_by(PredictionLog.created_at.desc()).all()
-    db.close()
-    history = [{"created_at": log.created_at.isoformat(), "match_description": log.match_description, "winner": log.winner, "confidence": log.confidence} for log in logs]
-    return {"history": history}
 
 # ---------- Запуск ----------
 async def start_bot():
