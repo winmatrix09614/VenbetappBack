@@ -51,16 +51,70 @@
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
     // ------------- Мгновенные уведомления о новых лидах -------------
     (function() {
-    let lastCount = {{ pending_count | default(0) }};
-    setInterval(async () => {
-        try {
-            const res = await fetch('/api/pending_users');
-            const data = await res.json();
-            if (data.count && data.count > lastCount) {
-                alert(`📢 Новый лид! Всего ожидает: ${data.count}`);
-                lastCount = data.count;
+        let lastCount = Number({{ pending_count | default(0) }});
+        let eventSource = null;
+
+        function showNotification(message) {
+            // Неблокирующий тост (можно заменить на alert, но тост красивее)
+            const toastContainer = document.getElementById('toast-container') || (() => {
+                const container = document.createElement('div');
+                container.id = 'toast-container';
+                container.style.position = 'fixed';
+                container.style.bottom = '20px';
+                container.style.right = '20px';
+                container.style.zIndex = '1050';
+                document.body.appendChild(container);
+                return container;
+            })();
+            const toast = document.createElement('div');
+            toast.style.backgroundColor = '#28a745';
+            toast.style.color = 'white';
+            toast.style.borderRadius = '8px';
+            toast.style.padding = '12px 20px';
+            toast.style.marginTop = '10px';
+            toast.style.cursor = 'pointer';
+            toast.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>${message}</span>
+                    <button type="button" style="background: none; border: none; color: white; font-size: 20px;" onclick="this.parentElement.parentElement.remove()">✖</button>
+                </div>
+            `;
+            toast.onclick = (e) => {
+                if (e.target.tagName !== 'BUTTON') window.location.href = '/dashboard';
+            };
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 8000);
+        }
+
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
             }
-        } catch(e) { console.error(e); }
-    }, 10000);
-})();
+            eventSource = new EventSource('/api/stream_leads');
+            
+            eventSource.addEventListener('update', function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    const currentCount = Number(data.count);
+                    if (!isNaN(currentCount) && currentCount > lastCount) {
+                        showNotification(`📢 Новый лид! Всего ожидает: ${currentCount}`);
+                        lastCount = currentCount;
+                    } else if (!isNaN(currentCount) && currentCount < lastCount) {
+                        lastCount = currentCount;
+                    }
+                } catch(e) {
+                    console.error('SSE parse error', e);
+                }
+            });
+            
+            eventSource.onerror = function(e) {
+                console.error('SSE connection error, reconnecting in 5s', e);
+                eventSource.close();
+                setTimeout(connectSSE, 5000);
+            };
+        }
+
+        // Запускаем SSE соединение
+        connectSSE();
+    })();
 </script>

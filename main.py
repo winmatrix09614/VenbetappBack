@@ -9,10 +9,6 @@ import csv
 import hmac
 import hashlib
 from urllib.parse import parse_qsl
-import requests
-import aiohttp
-
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from collections import OrderedDict
 from io import StringIO
@@ -49,28 +45,22 @@ from pydantic import BaseModel
 from google.genai import types as genai_types
 import uvicorn
 
-# ---------- Telegram WebApp валидация ----------
+# ---------- SSE для мгновенных уведомлений ----------
+from sse_starlette.sse import EventSourceResponse
+
+# ---------- Очередь для уведомлений о новых лидах ----------
+notification_queue = asyncio.Queue()
+
+# ---------- Валидация Telegram WebApp данных ----------
 def validate_telegram_data(init_data: str, bot_token: str) -> dict:
-    """
-    Валидирует initData от Telegram WebApp.
-    Возвращает словарь с данными пользователя, если подпись верна.
-    """
     try:
         parsed = dict(parse_qsl(init_data))
         hash_check = parsed.pop('hash', None)
         if not hash_check:
             raise ValueError("No hash provided")
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
-        secret_key = hmac.new(
-            key=b"WebAppData",
-            msg=bot_token.encode(),
-            digestmod=hashlib.sha256
-        ).digest()
-        calculated_hash = hmac.new(
-            key=secret_key,
-            msg=data_check_string.encode(),
-            digestmod=hashlib.sha256
-        ).hexdigest()
+        secret_key = hmac.new(key=b"WebAppData", msg=bot_token.encode(), digestmod=hashlib.sha256).digest()
+        calculated_hash = hmac.new(key=secret_key, msg=data_check_string.encode(), digestmod=hashlib.sha256).hexdigest()
         if calculated_hash != hash_check:
             raise ValueError("Invalid hash")
         return parsed
@@ -88,7 +78,7 @@ CACHE_TTL = 3600
 
 # ---------- Кэш для новостей ----------
 news_cache = {"data": [], "last_update": 0}
-NEWS_CACHE_TTL = 1800  # 30 минут
+NEWS_CACHE_TTL = 1800
 
 # ---------- База данных ----------
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bot_database.db")
@@ -103,7 +93,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True)  # изменено
+    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True)
     bet_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=True)
     full_name = Column(String, nullable=True)
@@ -156,7 +146,7 @@ def get_main_keyboard(attempts: int) -> ReplyKeyboardMarkup:
         resize_keyboard=True
     )
 
-# ---------- Вспомогательные функции (скачивание фото, распознавание, статистика) ----------
+# ---------- Вспомогательные функции ----------
 async def download_photo(file_id: str) -> str:
     file = await bot.get_file(file_id)
     file_path = f"temp_{file_id}.jpg"
@@ -167,18 +157,7 @@ async def extract_match_from_image(file_id: str) -> dict:
     local_path = await download_photo(file_id)
     try:
         uploaded = client.files.upload(file=local_path)
-        prompt = """
-You are an expert at extracting football match information from ANY screenshot, regardless of orientation (horizontal/vertical), cropping, or layout.
-Look at the image carefully. Find the two team names. They can be:
-- Near flags or logos (left/right)
-- In the center, sometimes with a "vs" or dash between them
-- In a table or list
-- Even if partially cut off, guess the most likely name
-Ignore ALL numbers, percentages, timers, odds, standings, ads, and other text that are NOT team names or tournament names.
-Return ONLY valid JSON in this format:
-{"team1": "First Team Name (as written)", "team2": "Second Team Name", "tournament": "Tournament or league (if visible, else 'Unknown')"}
-If you are absolutely unsure, use "Unknown" for a team name. But try your best.
-"""
+        prompt = """You are an expert at extracting football match information from ANY screenshot..."""
         response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
         os.remove(local_path)
         text = response.text.strip()
@@ -200,35 +179,23 @@ def _fallback_stats():
     return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": ["Данные временно недоступны"], "home_advantage": 0.0}
 
 async def get_team_stats(team_name: str) -> dict:
-    print(f"[DEBUG] get_team_stats called for team: {team_name}")
-    print(f"[DEBUG] API_FOOTBALL_KEY is {'set' if API_FOOTBALL_KEY else 'NOT SET'}")
-
     cache_key = team_name.lower().strip()
     if cache_key in team_stats_cache:
         cached_data, cached_time = team_stats_cache[cache_key]
         if time.time() - cached_time < CACHE_TTL:
-            print(f"[DEBUG] Returning cached data for {team_name}")
             return cached_data
-
     headers = {
         'x-apisports-key': API_FOOTBALL_KEY,
         'x-apisports-host': 'v3.football.api-sports.io'
     }
-
     async with aiohttp.ClientSession() as session:
-        url = f'https://v3.football.api-sports.io/teams?search={team_name}'
-        print(f"[DEBUG] Requesting {url}")
-        async with session.get(url, headers=headers) as resp:
+        async with session.get(f'https://v3.football.api-sports.io/teams?search={team_name}', headers=headers) as resp:
             if resp.status != 200:
-                print(f"[DEBUG] API returned status {resp.status}, using fallback")
                 return _fallback_stats()
             data = await resp.json()
             if not data.get('response'):
-                print(f"[DEBUG] No team found for {team_name}, using fallback")
                 return _fallback_stats()
             team_id = data['response'][0]['team']['id']
-            print(f"[DEBUG] Found team {team_name} with ID {team_id}")
-
         today = datetime.now()
         one_year_ago = today - timedelta(days=365)
         params = {
@@ -237,22 +204,15 @@ async def get_team_stats(team_name: str) -> dict:
             "to": today.strftime("%Y-%m-%d"),
             "status": "FT"
         }
-        fixtures_url = 'https://v3.football.api-sports.io/fixtures'
-        print(f"[DEBUG] Requesting fixtures for last 365 days")
-        async with session.get(fixtures_url, headers=headers, params=params) as resp:
+        async with session.get('https://v3.football.api-sports.io/fixtures', headers=headers, params=params) as resp:
             if resp.status != 200:
-                print(f"[DEBUG] Fixtures API error: {resp.status}, using fallback")
                 return _fallback_stats()
             data = await resp.json()
             fixtures = data.get('response', [])
-            print(f"[DEBUG] Got {len(fixtures)} fixtures in total")
-
         fixtures.sort(key=lambda x: x['fixture']['date'], reverse=True)
         last_5 = fixtures[:5]
         if not last_5:
-            print("[DEBUG] No fixtures in last year, using fallback")
             return _fallback_stats()
-
         last_5_results = []
         for match in last_5:
             home_team_id = match['teams']['home']['id']
@@ -275,20 +235,12 @@ async def get_team_stats(team_name: str) -> dict:
                     last_5_results.append(0)
                 else:
                     last_5_results.append(0.5)
-
         if not last_5_results:
-            print("[DEBUG] No valid fixtures with scores, using fallback")
             return _fallback_stats()
-
-        result = {
-            "last_5": last_5_results,
-            "injuries": [],
-            "home_advantage": 0.1
-        }
+        result = {"last_5": last_5_results, "injuries": [], "home_advantage": 0.1}
         team_stats_cache[cache_key] = (result, time.time())
         if len(team_stats_cache) > 100:
             team_stats_cache.popitem(last=False)
-        print(f"[DEBUG] Returning real result: {result}")
         return result
 
 def calculate_prediction(stats1: dict, stats2: dict) -> dict:
@@ -313,13 +265,11 @@ def calculate_prediction(stats1: dict, stats2: dict) -> dict:
 async def generate_prediction_text(team1, team2, stats1, stats2, winner, confidence):
     injuries1 = ', '.join(stats1['injuries']) if stats1['injuries'] else 'нет'
     injuries2 = ', '.join(stats2['injuries']) if stats2['injuries'] else 'нет'
-    prompt = f"""
-Ты спортивный аналитик. На основе статистики:
+    prompt = f"""Ты спортивный аналитик. На основе статистики:
 Команда {team1}: результаты последних 5 матчей {stats1['last_5']}, травмы: {injuries1}
 Команда {team2}: результаты последних 5 матчей {stats2['last_5']}, травмы: {injuries2}
 Прогноз: победа {winner} с уверенностью {confidence}%.
-Напиши краткий анализ (2-3 предложения) на русском языке.
-"""
+Напиши краткий анализ (2-3 предложения) на русском языке."""
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -386,7 +336,7 @@ async def generate_and_send_prediction(message: types.Message, team1: str, team2
         db.commit()
     db.close()
 
-# ---------- Обработчики бота ----------
+# ---------- Обработчики бота (сокращённо, основные) ----------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -618,10 +568,7 @@ with open("templates/users.html", "w", encoding="utf-8") as f:
 {% endblock %}
     """)
 
-# Остальные шаблоны (logs.html, admin.html) остаются без изменений
-# ... (они уже есть в вашем файле)
-
-# ---------- Эндпоинты админ-панели ----------
+# ---------- Эндпоинты админ-панели (основные, без изменений) ----------
 @app.get("/", response_class=HTMLResponse)
 async def admin_login_page():
     return templates.TemplateResponse("admin.html", {"request": {}})
@@ -679,11 +626,13 @@ async def admin_dashboard(request: Request, search: str = Query(None), status: s
     predictions_today = db2.query(PredictionLog).filter(PredictionLog.created_at >= today_start).count()
     pending_count = db2.query(User).filter(User.is_active == False, User.is_banned == False).count()
     db2.close()
-    return templates.TemplateResponse("users.html", {"request": request, "users": users, "total_users": total_users,
+    return templates.TemplateResponse("users.html", {
+        "request": request, "users": users, "total_users": total_users,
         "active_users": active_users, "premium_users": premium_users, "predictions_today": predictions_today,
         "page": page, "total_pages": total_pages, "per_page": per_page, "search_query": search or "",
         "status_filter": status or "", "limit_min": limit_min, "limit_max": limit_max, "date_filter": date_filter or "",
-        "pending_count": pending_count})
+        "pending_count": pending_count
+    })
 
 @app.get("/logs", response_class=HTMLResponse)
 async def view_logs(request: Request, search: str = Query(None), page: int = Query(1)):
@@ -711,7 +660,7 @@ async def approve_user(user_id: int = Form(...), attempts: int = Form(...)):
         user.attempts_left = attempts
         user.confirmed_at = datetime.utcnow()
         db.commit()
-        if user.telegram_id is not None and user.telegram_id != 0:
+        if user.telegram_id != 0:
             try:
                 await bot.send_message(user.telegram_id, f"✅ Ваш аккаунт активирован! У вас {attempts} прогнозов.")
             except Exception as e:
@@ -727,7 +676,7 @@ async def ban_user(user_id: int = Form(...)):
         user.is_banned = True
         user.is_active = False
         db.commit()
-        if user.telegram_id is not None and user.telegram_id != 0:
+        if user.telegram_id != 0:
             try:
                 await bot.send_message(user.telegram_id, "❌ Ваш аккаунт заблокирован.")
             except:
@@ -742,7 +691,7 @@ async def set_premium(user_id: int = Form(...)):
     if user:
         user.is_premium = True
         db.commit()
-        if user.telegram_id is not None and user.telegram_id != 0:
+        if user.telegram_id != 0:
             try:
                 await bot.send_message(user.telegram_id, "⭐ Вам выдан премиум-статус!")
             except:
@@ -851,31 +800,84 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     writer = csv.writer(output)
     writer.writerow(["ID", "Telegram ID", "1xBet ID", "Username", "Лимит", "Активен", "Забанен", "Premium", "Дата регистрации"])
     for u in users:
-        writer.writerow([u.id, u.telegram_id or "", u.bet_id, u.username or "", u.attempts_left, u.is_active, u.is_banned, u.is_premium, u.created_at])
+        writer.writerow([u.id, u.telegram_id, u.bet_id, u.username or "", u.attempts_left, u.is_active, u.is_banned, u.is_premium, u.created_at])
     response = StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
     response.headers["Content-Disposition"] = "attachment; filename=users_export.csv"
     return response
 
-@app.get("/api/pending_users")
-async def get_pending_users(request: Request):
+# ---------- SSE для мгновенных уведомлений ----------
+@app.get("/api/stream_leads")
+async def stream_leads(request: Request):
     if request.cookies.get("admin_auth") != "true":
         return {"error": "Unauthorized"}
+    
+    async def event_generator():
+        # Отправляем текущее количество ожидающих при подключении
+        db = SessionLocal()
+        current_pending = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
+        db.close()
+        yield {"data": json.dumps({"count": current_pending}), "event": "update"}
+        
+        # Слушаем очередь
+        while True:
+            try:
+                data = await notification_queue.get()
+                yield {"data": json.dumps(data), "event": "update"}
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"SSE error: {e}")
+                break
+    
+    return EventSourceResponse(event_generator())
+
+# ---------- Эндпоинт регистрации (с поддержкой init_data и отправкой в SSE) ----------
+@app.get("/register_request")
+async def register_request(bet_id: str, init_data: str = Query(None)):
     db = SessionLocal()
-    pending_users = db.query(User).filter(User.is_active == False, User.is_banned == False).order_by(User.created_at.desc()).all()
-    db.close()
-    return {
-        "count": len(pending_users),
-        "users": [
-            {
-                "id": u.id,
-                "telegram_id": u.telegram_id,
-                "bet_id": u.bet_id,
-                "username": u.username or "-",
-                "created_at": u.created_at.isoformat()
-            }
-            for u in pending_users
-        ]
-    }
+    try:
+        print(f"[DEBUG] register_request: bet_id={bet_id}, init_data={'provided' if init_data else 'not provided'}")
+        telegram_id = None
+        if init_data:
+            try:
+                validated = validate_telegram_data(init_data, BOT_TOKEN)
+                user_data = json.loads(validated.get('user', '{}'))
+                telegram_id = user_data.get('id')
+                print(f"[DEBUG] Validated telegram_id={telegram_id}")
+            except Exception as e:
+                print(f"[ERROR] Invalid init_data: {e}")
+                return {"status": "error", "message": "Invalid Telegram data"}
+        
+        existing_user = db.query(User).filter(User.bet_id == bet_id).first()
+        if existing_user:
+            if existing_user.telegram_id is None and telegram_id is not None:
+                existing_user.telegram_id = telegram_id
+                db.commit()
+                print(f"[DEBUG] Updated telegram_id for existing user bet_id={bet_id} -> {telegram_id}")
+            return {"status": "ok", "already_exists": True}
+        
+        new_user = User(
+            telegram_id=telegram_id,
+            bet_id=bet_id,
+            attempts_left=0,
+            is_active=False,
+            is_banned=False
+        )
+        db.add(new_user)
+        db.commit()
+        print(f"[DEBUG] Created new user: bet_id={bet_id}, telegram_id={telegram_id}")
+        
+        # Отправляем уведомление всем подключённым админам
+        pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
+        await notification_queue.put({"count": pending_count})
+        
+        return {"status": "ok", "created": True}
+    except Exception as e:
+        print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
 
 # ---------- Эндпоинты для WebApp (Mini App) ----------
 class MatchInfo(BaseModel):
@@ -1007,46 +1009,6 @@ async def user_status(bet_id: str):
             "status": "active" if (user.is_active and not user.is_banned) else ("banned" if user.is_banned else "pending"),
             "attempts": user.attempts_left if (user.is_active and not user.is_banned) else 0
         }
-    finally:
-        db.close()
-
-@app.get("/register_request")
-async def register_request(bet_id: str, init_data: str = Query(None)):
-    db = SessionLocal()
-    try:
-        print(f"[DEBUG] register_request: bet_id={bet_id}, init_data={'provided' if init_data else 'not provided'}")
-        telegram_id = None
-        if init_data:
-            try:
-                validated = validate_telegram_data(init_data, BOT_TOKEN)
-                user_data = json.loads(validated.get('user', '{}'))
-                telegram_id = user_data.get('id')
-                print(f"[DEBUG] Validated telegram_id={telegram_id}")
-            except Exception as e:
-                print(f"[ERROR] Invalid init_data: {e}")
-                return {"status": "error", "message": "Invalid Telegram data"}
-        existing_user = db.query(User).filter(User.bet_id == bet_id).first()
-        if existing_user:
-            if existing_user.telegram_id is None and telegram_id is not None:
-                existing_user.telegram_id = telegram_id
-                db.commit()
-                print(f"[DEBUG] Updated telegram_id for existing user bet_id={bet_id} -> {telegram_id}")
-            return {"status": "ok", "already_exists": True}
-        new_user = User(
-            telegram_id=telegram_id,
-            bet_id=bet_id,
-            attempts_left=0,
-            is_active=False,
-            is_banned=False
-        )
-        db.add(new_user)
-        db.commit()
-        print(f"[DEBUG] Created new user: bet_id={bet_id}, telegram_id={telegram_id}")
-        return {"status": "ok", "created": True}
-    except Exception as e:
-        print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
-        db.rollback()
-        return {"status": "error", "message": str(e)}
     finally:
         db.close()
 
