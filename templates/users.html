@@ -1,216 +1,120 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Управление пользователями</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        .stats { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
-        .stat-card { background: #e9ecef; padding: 10px 20px; border-radius: 8px; flex: 1; min-width: 150px; text-align: center; }
-        .stat-card h3 { margin: 0 0 5px; font-size: 1.2em; }
-        .stat-card p { margin: 0; font-size: 1.5em; font-weight: bold; }
-        .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: flex-end; }
-        .filters input, .filters select, .filters button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
-        .filters button { background: #007bff; color: white; border: none; cursor: pointer; }
-        .filters button:hover { background: #0056b3; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: middle; }
-        th { background: #f2f2f2; position: sticky; top: 0; }
-        .actions { display: flex; gap: 5px; flex-wrap: wrap; }
-        .actions button, .action-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px; }
-        .approve-btn { background: #28a745; color: white; }
-        .ban-btn { background: #dc3545; color: white; }
-        .premium-btn { background: #ffc107; color: black; }
-        .delete-btn { background: #6c757d; color: white; }
-        .mass-actions { margin: 10px 0; display: flex; gap: 10px; align-items: center; }
-        .pagination { margin-top: 20px; display: flex; justify-content: center; gap: 10px; }
-        .pagination a, .pagination span { padding: 5px 10px; border: 1px solid #ddd; text-decoration: none; color: #007bff; }
-        .pagination .current { background: #007bff; color: white; border-color: #007bff; }
-        .btn-secondary { background: #6c757d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h1>Управление пользователями</h1>
-    <div class="stats">
-        <div class="stat-card"><h3>Всего пользователей</h3><p>{{ total_users }}</p></div>
-        <div class="stat-card"><h3>Активные</h3><p>{{ active_users }}</p></div>
-        <div class="stat-card"><h3>Премиум</h3><p>{{ premium_users }}</p></div>
-        <div class="stat-card"><h3>Прогнозов за 24ч</h3><p>{{ predictions_today }}</p></div>
-        <div class="stat-card"><h3>Ожидают</h3><p>{{ pending_count }}</p></div>
+{% extends "admin_base.html" %}
+{% block title %}Пользователи{% endblock %}
+{% block content %}
+<div class="container-fluid px-0">
+    <h2 class="mb-4">👥 Управление пользователями</h2>
+    <div class="row mb-4">
+        <div class="col-md-3"><div class="card text-white bg-primary"><div class="card-body"><h5 class="card-title">Всего пользователей</h5><p class="card-text display-6">{{ total_users }}</p></div></div></div>
+        <div class="col-md-3"><div class="card text-white bg-success"><div class="card-body"><h5 class="card-title">Активные</h5><p class="card-text display-6">{{ active_users }}</p></div></div></div>
+        <div class="col-md-3"><div class="card text-white bg-warning"><div class="card-body"><h5 class="card-title">Премиум</h5><p class="card-text display-6">{{ premium_users }}</p></div></div></div>
+        <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h5 class="card-title">Прогнозов за 24ч</h5><p class="card-text display-6">{{ predictions_today }}</p></div></div></div>
     </div>
-
-    <form method="get" action="/dashboard" class="filters">
-        <input type="text" name="search" placeholder="Поиск" value="{{ search_query }}">
-        <select name="status">
-            <option value="">Все статусы</option>
-            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
-            <option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забаненные</option>
-            <option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option>
-            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидают</option>
-        </select>
-        <input type="number" name="limit_min" placeholder="Лимит от" value="{{ limit_min or '' }}">
-        <input type="number" name="limit_max" placeholder="Лимит до" value="{{ limit_max or '' }}">
-        <select name="date_filter">
-            <option value="">Любая дата</option>
-            <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option>
-            <option value="week" {% if date_filter == 'week' %}selected{% endif %}>Неделя</option>
-            <option value="month" {% if date_filter == 'month' %}selected{% endif %}>Месяц</option>
-        </select>
-        <button type="submit">Применить фильтр</button>
-        <a href="/dashboard"><button type="button">Сбросить</button></a>
-    </form>
-
-    <div class="mass-actions">
-        <button id="massGiveAttemptsBtn" class="btn-secondary">Выдать +5 прогнозов выбранным</button>
-        <button id="massActivateBtn" class="approve-btn">Активировать выбранных</button>
-        <button id="massBanBtn" class="ban-btn">Забанить выбранных</button>
-        <button id="massDeleteBtn" class="delete-btn">Удалить выбранных</button>
-        <span>Выбрано: <span id="selectedCount">0</span></span>
+    <div class="card mb-4">
+        <div class="card-header">🔍 Расширенный фильтр</div>
+        <div class="card-body">
+            <form method="get" id="filterForm">
+                <div class="row">
+                    <div class="col-md-3"><label>Поиск</label><input type="text" name="search" class="form-control" value="{{ search_query }}"></div>
+                    <div class="col-md-2"><label>Статус</label><select name="status" class="form-select"><option value="">Все</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option><option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option><option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option><option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option></select></div>
+                    <div class="col-md-2"><label>Лимит от</label><input type="number" name="limit_min" class="form-control" value="{{ limit_min }}"></div>
+                    <div class="col-md-2"><label>Лимит до</label><input type="number" name="limit_max" class="form-control" value="{{ limit_max }}"></div>
+                    <div class="col-md-3"><label>Дата регистрации</label><select name="date_filter" class="form-select"><option value="">Любая</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-12"><button type="submit" class="btn btn-primary">Применить фильтр</button><a href="/dashboard" class="btn btn-secondary">Сбросить</a><button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button></div>
+                </div>
+            </form>
+        </div>
     </div>
-
-    <table id="usersTable">
-        <thead>
-            <tr><th style="width: 30px;"><input type="checkbox" id="selectAll"></th>
-                <th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr data-user-id="{{ user.id }}">
-                <td><input type="checkbox" class="user-checkbox" value="{{ user.id }}"></td>
-                <td>{{ user.id }}</td>
-                <td>{{ user.telegram_id or '—' }}</td>
-                <td>{{ user.bet_id }}</td>
-                <td class="attempts-cell">{{ user.attempts_left }}
-                    <button class="edit-attempts" data-id="{{ user.id }}" style="font-size:12px; margin-left:5px;">✏️</button>
-                </td>
-                <td>{{ '✅' if user.is_active and not user.is_banned else '❌' }}</td>
-                <td>{{ '✅' if user.is_banned else '—' }}</td>
-                <td>{{ '⭐' if user.is_premium else '—' }}</td>
-                <td class="actions">
-                    {% if not user.is_active and not user.is_banned %}
-                    <form method="post" action="/approve" style="display:inline;">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <input type="number" name="attempts" value="3" style="width:50px;" required>
-                        <button type="submit" class="approve-btn">Активировать</button>
-                    </form>
-                    {% endif %}
-                    {% if not user.is_banned %}
-                    <form method="post" action="/ban" style="display:inline;">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <button type="submit" class="ban-btn">Забанить</button>
-                    </form>
-                    {% else %}
-                    <form method="post" action="/approve" style="display:inline;">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <input type="hidden" name="attempts" value="{{ user.attempts_left }}">
-                        <button type="submit" class="approve-btn">Разбанить</button>
-                    </form>
-                    {% endif %}
-                    <form method="post" action="/premium" style="display:inline;">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <button type="submit" class="premium-btn">Премиум</button>
-                    </form>
-                    <form method="post" action="/delete_user" style="display:inline;" onsubmit="return confirm('Удалить пользователя {{ user.bet_id }}? Это действие необратимо.')">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <button type="submit" class="delete-btn">Удалить</button>
-                    </form>
-                    <button class="give-attempts" data-id="{{ user.id }}">+5</button>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <div class="pagination">
-        {% if page > 1 %}<a href="?page={{ page-1 }}&search={{ search_query }}&status={{ status_filter }}&limit_min={{ limit_min }}&limit_max={{ limit_max }}&date_filter={{ date_filter }}">« Предыдущая</a>{% endif %}
-        <span class="current">Страница {{ page }} из {{ total_pages }}</span>
-        {% if page < total_pages %}<a href="?page={{ page+1 }}&search={{ search_query }}&status={{ status_filter }}&limit_min={{ limit_min }}&limit_max={{ limit_max }}&date_filter={{ date_filter }}">Следующая »</a>{% endif %}
+    <div class="mb-3"><button type="button" id="massGiveAttempts" class="btn btn-outline-primary">➕ Выдать +5 прогнозов выбранным</button><button type="button" id="massActivate" class="btn btn-outline-success">✅ Активировать выбранных</button><button type="button" id="massBan" class="btn btn-outline-danger">🚫 Забанить выбранных</button></div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover" id="usersTable">
+            <thead class="table-dark"><tr><th><input type="checkbox" id="selectAll"></th><th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Username</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th></tr></thead>
+            <tbody>{% for u in users %}<tr><td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td><td>{{ u.id }}</td><td>{{ u.telegram_id }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td>
+            <td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td><td>{{ '⭐' if u.is_premium else '—' }}</td>
+            <td><div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><input type="number" name="attempts" value="50" style="width:60px; display:inline;"><button type="submit" class="btn btn-warning btn-sm">Акт.</button></form><form method="post" action="/ban" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-danger btn-sm">Бан</button></form><form method="post" action="/premium" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-secondary btn-sm">Premium</button></form></div></td>
+            </tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    <div class="row mt-3">
+        <div class="col-md-3"><select id="perPageSelect" class="form-select w-auto d-inline-block"><option value="20" {% if per_page == 20 %}selected{% endif %}>20</option><option value="50" {% if per_page == 50 %}selected{% endif %}>50</option><option value="100" {% if per_page == 100 %}selected{% endif %}>100</option></select><span>записей на странице</span></div>
+        <div class="col-md-9"><nav><ul class="pagination justify-content-end">{% if page > 1 %}<li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>{% endif %}{% for p in range(1, total_pages+1) %}<li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>{% endfor %}{% if page < total_pages %}<li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>{% endif %}</ul></nav></div>
     </div>
 </div>
-
 <script>
-    function getSelectedUserIds() {
-        let checkboxes = document.querySelectorAll('.user-checkbox:checked');
-        return Array.from(checkboxes).map(cb => parseInt(cb.value));
-    }
+    // ---------- Массовые операции (оставить без изменений) ----------
+    document.getElementById('massGiveAttempts').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s,attempts:5})}).then(()=>location.reload());});
+    document.getElementById('massActivate').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
+    document.getElementById('massBan').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
+    document.getElementById('exportCsvBtn').addEventListener('click',function(){window.location.href='/export_users_csv?'+new URLSearchParams({search:'{{ search_query }}',status:'{{ status_filter }}',limit_min:'{{ limit_min }}',limit_max:'{{ limit_max }}',date_filter:'{{ date_filter }}'}).toString();});
+    document.querySelectorAll('.give-attempts').forEach(btn=>{btn.addEventListener('click',function(){let userId=this.dataset.id,attempts=this.dataset.attempts;fetch('/give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,attempts:parseInt(attempts)})}).then(()=>location.reload());});});
+    document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
+    document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
 
-    document.getElementById('selectAll')?.addEventListener('change', function(e) {
-        document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = e.target.checked);
-        updateSelectedCount();
-    });
-    document.querySelectorAll('.user-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));
-    function updateSelectedCount() {
-        let count = document.querySelectorAll('.user-checkbox:checked').length;
-        document.getElementById('selectedCount').innerText = count;
-    }
+    // ---------- Мгновенные уведомления через SSE ----------
+    (function() {
+        console.log('[SSE] Script starting...');
+        let lastCount = Number({{ pending_count | default(0) }});
+        let eventSource = null;
 
-    async function massAction(endpoint, payload) {
-        let response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (response.ok) location.reload();
-        else alert('Ошибка');
-    }
+        function showNotification(message) {
+            const toastContainer = document.getElementById('toast-container') || (() => {
+                const container = document.createElement('div');
+                container.id = 'toast-container';
+                container.style.position = 'fixed';
+                container.style.bottom = '20px';
+                container.style.right = '20px';
+                container.style.zIndex = '1050';
+                document.body.appendChild(container);
+                return container;
+            })();
+            const toast = document.createElement('div');
+            toast.style.backgroundColor = '#28a745';
+            toast.style.color = 'white';
+            toast.style.borderRadius = '8px';
+            toast.style.padding = '12px 20px';
+            toast.style.marginTop = '10px';
+            toast.style.cursor = 'pointer';
+            toast.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>${message}</span>
+                    <button type="button" style="background: none; border: none; color: white; font-size: 20px;" onclick="this.parentElement.parentElement.remove()">✖</button>
+                </div>
+            `;
+            toast.onclick = (e) => {
+                if (e.target.tagName !== 'BUTTON') window.location.href = '/dashboard';
+            };
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 8000);
+        }
 
-    document.getElementById('massGiveAttemptsBtn')?.addEventListener('click', () => {
-        let ids = getSelectedUserIds();
-        if (ids.length === 0) return alert('Выберите пользователей');
-        let attempts = prompt('Количество прогнозов (по умолчанию 5)', '5');
-        if (attempts !== null) massAction('/mass_give_attempts', { user_ids: ids, attempts: parseInt(attempts) });
-    });
-    document.getElementById('massActivateBtn')?.addEventListener('click', () => {
-        let ids = getSelectedUserIds();
-        if (ids.length === 0) return alert('Выберите пользователей');
-        if (confirm('Активировать выбранных?')) massAction('/mass_activate', { user_ids: ids });
-    });
-    document.getElementById('massBanBtn')?.addEventListener('click', () => {
-        let ids = getSelectedUserIds();
-        if (ids.length === 0) return alert('Выберите пользователей');
-        if (confirm('Забанить выбранных?')) massAction('/mass_ban', { user_ids: ids });
-    });
-    document.getElementById('massDeleteBtn')?.addEventListener('click', () => {
-        let ids = getSelectedUserIds();
-        if (ids.length === 0) return alert('Выберите пользователей');
-        if (confirm('Удалить выбранных пользователей? Это действие необратимо.')) massAction('/mass_delete_users', { user_ids: ids });
-    });
-
-    document.querySelectorAll('.edit-attempts').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            let row = this.closest('tr');
-            let userId = row.dataset.userId;
-            let cell = row.querySelector('.attempts-cell');
-            let currentVal = parseInt(cell.innerText);
-            let newVal = prompt('Новое количество прогнозов:', currentVal);
-            if (newVal !== null && !isNaN(parseInt(newVal))) {
-                let response = await fetch('/give_attempts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, attempts: parseInt(newVal) - currentVal })
-                });
-                if (response.ok) location.reload();
-                else alert('Ошибка');
-            }
-        });
-    });
-
-    document.querySelectorAll('.give-attempts').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            let userId = this.dataset.id;
-            let response = await fetch('/give_attempts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, attempts: 5 })
+        function connectSSE() {
+            if (eventSource) eventSource.close();
+            console.log('[SSE] Creating EventSource...');
+            eventSource = new EventSource('/api/stream_leads?t=' + new Date().getTime());
+            eventSource.onopen = () => console.log('[SSE] Connection opened');
+            eventSource.addEventListener('update', function(event) {
+                console.log('[SSE] Received update:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    const currentCount = Number(data.count);
+                    if (!isNaN(currentCount) && currentCount > lastCount) {
+                        showNotification(`📢 Новый лид! Всего ожидает: ${currentCount}`);
+                        lastCount = currentCount;
+                    } else if (!isNaN(currentCount) && currentCount < lastCount) {
+                        lastCount = currentCount;
+                    }
+                } catch(e) { console.error('[SSE] Parse error:', e); }
             });
-            if (response.ok) location.reload();
-            else alert('Ошибка');
-        });
-    });
+            eventSource.onerror = function(e) {
+                console.error('[SSE] Connection error:', e);
+                eventSource.close();
+                setTimeout(connectSSE, 5000);
+            };
+        }
+
+        if (window.EventSource) connectSSE();
+        else console.error('[SSE] EventSource not supported');
+    })();
 </script>
-</body>
-</html>
+{% endblock %}

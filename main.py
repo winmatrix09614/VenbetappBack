@@ -221,19 +221,23 @@ def get_main_keyboard(attempts: int) -> ReplyKeyboardMarkup:
         resize_keyboard=True
     )
 
-# ---------- Вспомогательные функции бота ----------
-async def download_photo(file_id: str) -> str:
-    file = await bot.get_file(file_id)
-    file_path = f"temp_{file_id}.jpg"
-    await bot.download_file(file.file_path, file_path)
-    return file_path
+# Функцию download_photo мы удалили, она больше не нужна
 
 async def extract_match_from_image(file_id: str) -> dict:
-    local_path = await download_photo(file_id)
+    file = await bot.get_file(file_id)
+    
+    # Скачиваем прямо в оперативную память (BytesIO)
+    photo_bytes = io.BytesIO()
+    await bot.download_file(file.file_path, photo_bytes)
+    
+    image_part = genai_types.Part.from_bytes(
+        data=photo_bytes.getvalue(),
+        mime_type="image/jpeg"
+    )
+    
     max_retries = 2
     for attempt in range(max_retries):
         try:
-            uploaded = client.files.upload(file=local_path)
             prompt = """
 You are an expert at extracting football match information from ANY screenshot, regardless of orientation (horizontal/vertical), cropping, or layout.
 Look at the image carefully. Find the two team names. They can be:
@@ -246,7 +250,13 @@ Return ONLY valid JSON in this format:
 {"team1": "First Team Name (as written)", "team2": "Second Team Name", "tournament": "Tournament or league (if visible, else 'Unknown')"}
 If you are absolutely unsure, use "Unknown" for a team name. But try your best.
 """
-            response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
+            # Вызываем Gemini асинхронно, передавая байты напрямую
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=MODEL_NAME,
+                contents=[image_part, prompt],
+                config=genai_types.GenerateContentConfig(temperature=0.1)
+            )
             text = response.text.strip()
             json_match = re.search(r'\{.*\}', text, re.DOTALL)
             if json_match:
@@ -259,9 +269,9 @@ If you are absolutely unsure, use "Unknown" for a team name. But try your best.
         except Exception as e:
             print(f"Error in extract_match_from_image (attempt {attempt+1}): {e}")
             await asyncio.sleep(1)
-    os.remove(local_path)
+            
     return {"team1": "Unknown", "team2": "Unknown", "tournament": "Unknown"}
-
+    
 def _fallback_stats():
     return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": [], "home_advantage": 0.1}
 
@@ -311,10 +321,11 @@ async def generate_prediction_text(team1, team2, stats1, stats2, winner, confide
     injuries2 = ', '.join(stats2['injuries']) if stats2['injuries'] else 'нет'
     prompt = f"""
 Ты спортивный аналитик. На основе статистики:
-Команда {team1}: результаты последних 5 матчей {stats1['last_5']}, травмы: {injuries1}
-Команда {team2}: результаты последних 5 матчей {stats2['last_5']}, травмы: {injuries2}
-Прогноз: победа {winner} с уверенностью {confidence}%.
-Напиши краткий анализ (2-3 предложения) на русском языке. Пиши живо, без шаблонных фраз, старайся сделать каждый ответ уникальным.
+Команда {team1}: последние 5 матчей {stats1['last_5']}, травмы: {injuries1}
+Команда {team2}: последние 5 матчей {stats2['last_5']}, травмы: {injuries2}
+Твой вердикт уже вынесен: победа {winner}.
+ЗАДАЧА: Напиши ТОЛЬКО краткое аналитическое обоснование (2-3 предложения).
+СТРОГОЕ ПРАВИЛО: НЕ пиши проценты уверенности, НЕ пиши итоговый счет, НЕ дублируй вердикт (не пиши "Прогноз: победа"). Только логика и рассуждения на русском языке.
 """
     max_retries = 3
     for attempt in range(max_retries):
@@ -878,8 +889,10 @@ async def mass_ban(request: Request, data: dict, db: Session = Depends(get_db)):
 @app.post("/delete_user")
 async def delete_user(request: Request, user_id: int = Form(...), db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
-    if not staff:
-        raise HTTPException(status_code=401)
+    # ЗДЕСЬ ИСПРАВЛЕНИЕ:
+    if not staff or staff.role != "admin":
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         db.query(PredictionLog).filter(PredictionLog.user_id == user.id).delete()
@@ -891,8 +904,10 @@ async def delete_user(request: Request, user_id: int = Form(...), db: Session = 
 @app.post("/mass_delete_users")
 async def mass_delete_users(request: Request, data: dict, db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
-    if not staff:
-        raise HTTPException(status_code=401)
+    # ЗДЕСЬ ИСПРАВЛЕНИЕ:
+    if not staff or staff.role != "admin":
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    
     user_ids = data.get("user_ids", [])
     for uid in user_ids:
         user = db.query(User).filter(User.id == uid).first()
@@ -928,6 +943,18 @@ async def view_logs(request: Request, search: str = Query(None), page: int = Que
         "search_query": search or "",
         "staff_role": staff.role
     })
+@app.post("/admin/delete_log")
+async def delete_log(request: Request, log_id: int = Form(...), db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff or staff.role != "admin":
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    
+    log_entry = db.query(PredictionLog).filter(PredictionLog.id == log_id).first()
+    if log_entry:
+        db.delete(log_entry)
+        db.commit()
+        log_staff_action(db, staff.id, f"deleted log {log_id}")
+    return RedirectResponse(url="/logs", status_code=303)    
 
 # ---------- Управление сотрудниками (только для admin) ----------
 @app.get("/admin/staff", response_class=HTMLResponse)
@@ -1012,8 +1039,15 @@ async def stream_leads(request: Request, db: Session = Depends(get_db)):
             pass
         finally:
             notifier.remove(queue)
-    return EventSourceResponse(event_generator(), ping=20)
-
+    return EventSourceResponse(
+        event_generator(), 
+        ping=20,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 # ---------- Эндпоинт регистрации ----------
 @app.get("/register_request")
 async def register_request(bet_id: str, init_data: str = Query(None), source: str = Query(None), db: Session = Depends(get_db)):
