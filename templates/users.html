@@ -42,6 +42,7 @@
     </div>
 </div>
 <script>
+    // ---------- Массовые операции (оставить без изменений) ----------
     document.getElementById('massGiveAttempts').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s,attempts:5})}).then(()=>location.reload());});
     document.getElementById('massActivate').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
     document.getElementById('massBan').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
@@ -49,9 +50,10 @@
     document.querySelectorAll('.give-attempts').forEach(btn=>{btn.addEventListener('click',function(){let userId=this.dataset.id,attempts=this.dataset.attempts;fetch('/give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,attempts:parseInt(attempts)})}).then(()=>location.reload());});});
     document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
-    
+
     // ---------- Мгновенные уведомления через SSE ----------
     (function() {
+        console.log('[SSE] Script starting...');
         let lastCount = Number({{ pending_count | default(0) }});
         let eventSource = null;
 
@@ -87,11 +89,12 @@
         }
 
         function connectSSE() {
-            if (eventSource) {
-                eventSource.close();
-            }
+            if (eventSource) eventSource.close();
+            console.log('[SSE] Creating EventSource...');
             eventSource = new EventSource('/api/stream_leads?t=' + new Date().getTime());
+            eventSource.onopen = () => console.log('[SSE] Connection opened');
             eventSource.addEventListener('update', function(event) {
+                console.log('[SSE] Received update:', event.data);
                 try {
                     const data = JSON.parse(event.data);
                     const currentCount = Number(data.count);
@@ -101,17 +104,17 @@
                     } else if (!isNaN(currentCount) && currentCount < lastCount) {
                         lastCount = currentCount;
                     }
-                } catch(e) {
-                    console.error('SSE parse error', e);
-                }
+                } catch(e) { console.error('[SSE] Parse error:', e); }
             });
             eventSource.onerror = function(e) {
-                console.error('SSE error, reconnecting in 5s', e);
+                console.error('[SSE] Connection error:', e);
                 eventSource.close();
                 setTimeout(connectSSE, 5000);
             };
         }
 
-        connectSSE();
+        if (window.EventSource) connectSSE();
+        else console.error('[SSE] EventSource not supported');
     })();
 </script>
+{% endblock %}

@@ -27,7 +27,7 @@ if not all([BOT_TOKEN, GEMINI_API_KEY, API_FOOTBALL_KEY]):
 # ---- Google Gemini SDK ----
 from google import genai
 import feedparser
-import aiohttp  # для API-Football
+import aiohttp
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -55,7 +55,6 @@ class Notifier:
         self.connections: list[asyncio.Queue] = []
 
     async def push(self, msg: dict):
-        # Отправляем сообщение всем подключённым клиентам
         for q in self.connections:
             await q.put(msg)
 
@@ -91,11 +90,10 @@ def validate_telegram_data(init_data: str, bot_token: str) -> dict:
 client = genai.Client(api_key=GEMINI_API_KEY)
 MODEL_NAME = "gemini-2.5-flash"
 
-# ---------- Кэш для статистики команд ----------
+# ---------- Кэш ----------
 team_stats_cache = OrderedDict()
 CACHE_TTL = 3600
 
-# ---------- Кэш для новостей ----------
 news_cache = {"data": [], "last_update": 0}
 NEWS_CACHE_TTL = 1800
 
@@ -355,7 +353,7 @@ async def generate_and_send_prediction(message: types.Message, team1: str, team2
         db.commit()
     db.close()
 
-# ---------- Обработчики бота (основные, без изменений) ----------
+# ---------- Обработчики бота (упрощённо) ----------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -491,194 +489,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Шаблоны должны лежать в папке templates (статически)
 templates = Jinja2Templates(directory="templates")
-os.makedirs("templates", exist_ok=True)
-
-# Шаблоны админки (уже есть, здесь не копирую)
-# ... (они остаются без изменений, предполагается, что они есть в репозитории)
-
-# ---------- Эндпоинты админ-панели (без изменений) ----------
-# ... (здесь идут /, /login, /dashboard, /logs, /approve, /ban, /premium, /logout, массовые операции)
-# Для краткости они не повторяются, но они должны остаться в вашем файле. 
-# В релизном коде они есть. Я оставляю их как есть, не переписываю.
-
-# ---------- SSE для мгновенных уведомлений (broadcast) ----------
-def get_current_pending_count() -> int:
-    db = SessionLocal()
-    count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
-    db.close()
-    return count
-
-@app.get("/api/stream_leads")
-async def stream_leads(request: Request):
-    if request.cookies.get("admin_auth") != "true":
-        return {"error": "Unauthorized"}
-    
-    async def event_generator():
-        # Создаём очередь для этого клиента
-        queue = await notifier.connect()
-        # Отправляем текущее состояние
-        yield {"data": json.dumps({"count": get_current_pending_count()}), "event": "update"}
-        try:
-            while True:
-                data = await queue.get()
-                yield {"data": json.dumps(data), "event": "update"}
-        except asyncio.CancelledError:
-            pass
-        finally:
-            notifier.remove(queue)
-    
-    return EventSourceResponse(
-        event_generator(),
-        ping=20,   # каждые 20 секунд отправляем пинг, чтобы соединение не разрывалось
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # отключаем буферизацию на Railway/Nginx
-        }
-    )
-
-# ---------- Эндпоинт регистрации (с отправкой уведомления) ----------
-@app.get("/register_request")
-async def register_request(bet_id: str, init_data: str = Query(None)):
-    db = SessionLocal()
-    try:
-        print(f"[DEBUG] register_request: bet_id={bet_id}, init_data={'provided' if init_data else 'not provided'}")
-        telegram_id = None
-        if init_data:
-            try:
-                validated = validate_telegram_data(init_data, BOT_TOKEN)
-                user_data = json.loads(validated.get('user', '{}'))
-                telegram_id = user_data.get('id')
-                print(f"[DEBUG] Validated telegram_id={telegram_id}")
-            except Exception as e:
-                print(f"[ERROR] Invalid init_data: {e}")
-                return {"status": "error", "message": "Invalid Telegram data"}
-        
-        existing_user = db.query(User).filter(User.bet_id == bet_id).first()
-        if existing_user:
-            if existing_user.telegram_id is None and telegram_id is not None:
-                existing_user.telegram_id = telegram_id
-                db.commit()
-                print(f"[DEBUG] Updated telegram_id for existing user bet_id={bet_id} -> {telegram_id}")
-            return {"status": "ok", "already_exists": True}
-        
-        new_user = User(
-            telegram_id=telegram_id,
-            bet_id=bet_id,
-            attempts_left=0,
-            is_active=False,
-            is_banned=False
-        )
-        db.add(new_user)
-        db.commit()
-        print(f"[DEBUG] Created new user: bet_id={bet_id}, telegram_id={telegram_id}")
-        
-        # Уведомляем всех подключённых админов
-        pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
-        await notifier.push({"count": pending_count})
-        print(f"[DEBUG] Sent notification to {len(notifier.connections)} connections with count={pending_count}")
-        
-        return {"status": "ok", "created": True}
-    except Exception as e:
-        print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
-        db.rollback()
-        return {"status": "error", "message": str(e)}
-    finally:
-        db.close()
-
-# Шаблоны админки (создаются автоматически)
-with open("templates/admin_base.html", "w", encoding="utf-8") as f:
-    f.write("""
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin Panel{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: #f8f9fa; }
-        .sidebar { background: #1a1a2e; min-height: 100vh; }
-        .sidebar a { color: #ddd; text-decoration: none; padding: 10px; display: block; }
-        .sidebar a:hover { background: #0f0f1a; color: white; }
-        .content { padding: 20px; }
-        .table-responsive { background: white; border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    </style>
-</head>
-<body>
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-md-2 sidebar p-0">
-            <div class="p-3">
-                <h5 class="text-white">Админ-панель</h5>
-                <hr class="bg-light">
-                <a href="/dashboard">📊 Пользователи</a>
-                <a href="/logs">📜 Логи прогнозов</a>
-                <a href="/logout" class="text-danger">🚪 Выйти</a>
-            </div>
-        </div>
-        <div class="col-md-10 content">
-            {% block content %}{% endblock %}
-        </div>
-    </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-    """)
-
-with open("templates/users.html", "w", encoding="utf-8") as f:
-    f.write("""
-{% extends "admin_base.html" %}
-{% block title %}Пользователи{% endblock %}
-{% block content %}
-<div class="container-fluid px-0">
-    <h2 class="mb-4">👥 Управление пользователями</h2>
-    <div class="row mb-4">
-        <div class="col-md-3"><div class="card text-white bg-primary"><div class="card-body"><h5 class="card-title">Всего пользователей</h5><p class="card-text display-6">{{ total_users }}</p></div></div></div>
-        <div class="col-md-3"><div class="card text-white bg-success"><div class="card-body"><h5 class="card-title">Активные</h5><p class="card-text display-6">{{ active_users }}</p></div></div></div>
-        <div class="col-md-3"><div class="card text-white bg-warning"><div class="card-body"><h5 class="card-title">Премиум</h5><p class="card-text display-6">{{ premium_users }}</p></div></div></div>
-        <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h5 class="card-title">Прогнозов за 24ч</h5><p class="card-text display-6">{{ predictions_today }}</p></div></div></div>
-    </div>
-    <div class="card mb-4">
-        <div class="card-header">🔍 Расширенный фильтр</div>
-        <div class="card-body">
-            <form method="get" id="filterForm">
-                <div class="row">
-                    <div class="col-md-3"><label>Поиск</label><input type="text" name="search" class="form-control" value="{{ search_query }}"></div>
-                    <div class="col-md-2"><label>Статус</label><select name="status" class="form-select"><option value="">Все</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option><option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option><option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option><option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option></select></div>
-                    <div class="col-md-2"><label>Лимит от</label><input type="number" name="limit_min" class="form-control" value="{{ limit_min }}"></div>
-                    <div class="col-md-2"><label>Лимит до</label><input type="number" name="limit_max" class="form-control" value="{{ limit_max }}"></div>
-                    <div class="col-md-3"><label>Дата регистрации</label><select name="date_filter" class="form-select"><option value="">Любая</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-md-12"><button type="submit" class="btn btn-primary">Применить фильтр</button><a href="/dashboard" class="btn btn-secondary">Сбросить</a><button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button></div>
-                </div>
-            </form>
-        </div>
-    </div>
-    <div class="mb-3"><button type="button" id="massGiveAttempts" class="btn btn-outline-primary">➕ Выдать +5 прогнозов выбранным</button><button type="button" id="massActivate" class="btn btn-outline-success">✅ Активировать выбранных</button><button type="button" id="massBan" class="btn btn-outline-danger">🚫 Забанить выбранных</button></div>
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover" id="usersTable">
-            <thead class="table-dark"><tr><th><input type="checkbox" id="selectAll"></th><th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Username</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th></tr></thead>
-            <tbody>{% for u in users %}<tr>}<input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td>
-                <td>{{ u.id }}</td><td>{{ u.telegram_id or '-' }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td>
-                <td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td><td>{{ '⭐' if u.is_premium else '—' }}</td>
-                <td><div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><input type="number" name="attempts" value="50" style="width:60px; display:inline;"><button type="submit" class="btn btn-warning btn-sm">Акт.</button></form><form method="post" action="/ban" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-danger btn-sm">Бан</button></form><form method="post" action="/premium" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-secondary btn-sm">Premium</button></form></div></td>
-            </tr>{% endfor %}</tbody>
-        </table>
-    </div>
-    <div class="row mt-3">
-        <div class="col-md-3"><select id="perPageSelect" class="form-select w-auto d-inline-block"><option value="20" {% if per_page == 20 %}selected{% endif %}>20</option><option value="50" {% if per_page == 50 %}selected{% endif %}>50</option><option value="100" {% if per_page == 100 %}selected{% endif %}>100</option></select><span>записей на странице</span></div>
-        <div class="col-md-9"><nav><ul class="pagination justify-content-end">{% if page > 1 %}<li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>{% endif %}{% for p in range(1, total_pages+1) %}<li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>{% endfor %}{% if page < total_pages %}<li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>{% endif %}</ul></nav></div>
-    </div>
-</div>
-<script>
-    // ... (существующий скрипт для массовых операций и уведомлений остаётся без изменений)
-</script>
-{% endblock %}
-    """)
 
 # ---------- Эндпоинты админ-панели (основные, без изменений) ----------
 @app.get("/", response_class=HTMLResponse)
@@ -917,33 +729,42 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     response.headers["Content-Disposition"] = "attachment; filename=users_export.csv"
     return response
 
-# ---------- SSE для мгновенных уведомлений ----------
+# ---------- SSE (только одна реализация) ----------
+def get_current_pending_count() -> int:
+    db = SessionLocal()
+    count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
+    db.close()
+    return count
+
 @app.get("/api/stream_leads")
 async def stream_leads(request: Request):
     if request.cookies.get("admin_auth") != "true":
         return {"error": "Unauthorized"}
     
     async def event_generator():
-        # Отправляем текущее количество ожидающих при подключении
-        db = SessionLocal()
-        current_pending = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
-        db.close()
-        yield {"data": json.dumps({"count": current_pending}), "event": "update"}
-        
-        # Слушаем очередь
-        while True:
-            try:
-                data = await notification_queue.get()
+        queue = await notifier.connect()
+        # Отправляем текущее состояние
+        yield {"data": json.dumps({"count": get_current_pending_count()}), "event": "update"}
+        try:
+            while True:
+                data = await queue.get()
                 yield {"data": json.dumps(data), "event": "update"}
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                print(f"SSE error: {e}")
-                break
+        except asyncio.CancelledError:
+            pass
+        finally:
+            notifier.remove(queue)
     
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        ping=20,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
-# ---------- Эндпоинт регистрации (с поддержкой init_data и отправкой в SSE) ----------
+# ---------- Эндпоинт регистрации (единственный) ----------
 @app.get("/register_request")
 async def register_request(bet_id: str, init_data: str = Query(None)):
     db = SessionLocal()
@@ -981,7 +802,8 @@ async def register_request(bet_id: str, init_data: str = Query(None)):
         
         # Отправляем уведомление всем подключённым админам
         pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
-        await notification_queue.put({"count": pending_count})
+        await notifier.push({"count": pending_count})
+        print(f"[DEBUG] Sent notification to {len(notifier.connections)} connections with count={pending_count}")
         
         return {"status": "ok", "created": True}
     except Exception as e:
