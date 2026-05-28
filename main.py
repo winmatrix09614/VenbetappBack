@@ -1012,15 +1012,28 @@ async def user_status(bet_id: str):
 async def register_request(bet_id: str):
     db = SessionLocal()
     try:
+        print(f"[DEBUG] register_request called for bet_id={bet_id}")
+        # Проверяем, существует ли пользователь
         user = db.query(User).filter(User.bet_id == bet_id).first()
-        if not user:
-            new_user = User(telegram_id=0, bet_id=bet_id, attempts_left=0, is_active=False, is_banned=False)
-            db.add(new_user)
-            db.commit()
-        return {"status": "ok"}
+        if user:
+            print(f"[DEBUG] User {bet_id} already exists, status: {user.is_active}")
+            return {"status": "ok", "already_exists": True}
+        # Создаём нового
+        new_user = User(
+            telegram_id=0,
+            bet_id=bet_id,
+            attempts_left=0,
+            is_active=False,
+            is_banned=False
+        )
+        db.add(new_user)
+        db.commit()
+        print(f"[DEBUG] Created new user with bet_id={bet_id}")
+        return {"status": "ok", "created": True}
     except Exception as e:
-        print(f"Register error: {e}")
-        return {"status": "error"}
+        print(f"[ERROR] Register error for {bet_id}: {e}")
+        db.rollback()
+        return {"status": "error", "message": str(e)}
     finally:
         db.close()
 
