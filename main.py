@@ -675,11 +675,13 @@ async def admin_dashboard(request: Request, search: str = Query(None), status: s
     premium_users = db2.query(User).filter(User.is_premium == True).count()
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     predictions_today = db2.query(PredictionLog).filter(PredictionLog.created_at >= today_start).count()
+    pending_count = db2.query(User).filter(User.is_active == False, User.is_banned == False).count()
     db2.close()
     return templates.TemplateResponse("users.html", {"request": request, "users": users, "total_users": total_users,
         "active_users": active_users, "premium_users": premium_users, "predictions_today": predictions_today,
         "page": page, "total_pages": total_pages, "per_page": per_page, "search_query": search or "",
-        "status_filter": status or "", "limit_min": limit_min, "limit_max": limit_max, "date_filter": date_filter or ""})
+        "status_filter": status or "", "limit_min": limit_min, "limit_max": limit_max, "date_filter": date_filter or "",
+        "pending_count": pending_count})
 
 @app.get("/logs", response_class=HTMLResponse)
 async def view_logs(request: Request, search: str = Query(None), page: int = Query(1)):
@@ -851,6 +853,27 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     response = StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
     response.headers["Content-Disposition"] = "attachment; filename=users_export.csv"
     return response
+    
+@app.get("/api/pending_users")
+async def get_pending_users(request: Request):
+    if request.cookies.get("admin_auth") != "true":
+        return {"error": "Unauthorized"}
+    db = SessionLocal()
+    pending_users = db.query(User).filter(User.is_active == False, User.is_banned == False).order_by(User.created_at.desc()).all()
+    db.close()
+    return {
+        "count": len(pending_users),
+        "users": [
+            {
+                "id": u.id,
+                "telegram_id": u.telegram_id,
+                "bet_id": u.bet_id,
+                "username": u.username or "-",
+                "created_at": u.created_at.isoformat()
+            }
+            for u in pending_users
+        ]
+    }
 
 # ---------- Эндпоинты для WebApp (Mini App) ----------
 class MatchInfo(BaseModel):

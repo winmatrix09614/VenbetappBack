@@ -1,152 +1,44 @@
-
 {% extends "admin_base.html" %}
 {% block title %}Пользователи{% endblock %}
 {% block content %}
 <div class="container-fluid px-0">
     <h2 class="mb-4">👥 Управление пользователями</h2>
-    <!-- Виджеты -->
     <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card text-white bg-primary">
-                <div class="card-body">
-                    <h5 class="card-title">Всего пользователей</h5>
-                    <p class="card-text display-6">{{ total_users }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-success">
-                <div class="card-body">
-                    <h5 class="card-title">Активные</h5>
-                    <p class="card-text display-6">{{ active_users }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-warning">
-                <div class="card-body">
-                    <h5 class="card-title">Премиум</h5>
-                    <p class="card-text display-6">{{ premium_users }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-info">
-                <div class="card-body">
-                    <h5 class="card-title">Прогнозов за 24ч</h5>
-                    <p class="card-text display-6">{{ predictions_today }}</p>
-                </div>
-            </div>
-        </div>
+        <div class="col-md-3"><div class="card text-white bg-primary"><div class="card-body"><h5 class="card-title">Всего пользователей</h5><p class="card-text display-6">{{ total_users }}</p></div></div></div>
+        <div class="col-md-3"><div class="card text-white bg-success"><div class="card-body"><h5 class="card-title">Активные</h5><p class="card-text display-6">{{ active_users }}</p></div></div></div>
+        <div class="col-md-3"><div class="card text-white bg-warning"><div class="card-body"><h5 class="card-title">Премиум</h5><p class="card-text display-6">{{ premium_users }}</p></div></div></div>
+        <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h5 class="card-title">Прогнозов за 24ч</h5><p class="card-text display-6">{{ predictions_today }}</p></div></div></div>
     </div>
-    <!-- Фильтры -->
     <div class="card mb-4">
         <div class="card-header">🔍 Расширенный фильтр</div>
         <div class="card-body">
             <form method="get" id="filterForm">
                 <div class="row">
-                    <div class="col-md-3">
-                        <label>Поиск (ID, Telegram, 1xBet)</label>
-                        <input type="text" name="search" class="form-control" value="{{ search_query }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label>Статус</label>
-                        <select name="status" class="form-select">
-                            <option value="">Все</option>
-                            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option>
-                            <option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option>
-                            <option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option>
-                            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label>Лимит от</label>
-                        <input type="number" name="limit_min" class="form-control" value="{{ limit_min }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label>Лимит до</label>
-                        <input type="number" name="limit_max" class="form-control" value="{{ limit_max }}">
-                    </div>
-                    <div class="col-md-3">
-                        <label>Дата регистрации</label>
-                        <select name="date_filter" class="form-select">
-                            <option value="">Любая</option>
-                            <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option>
-                            <option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option>
-                            <option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option>
-                        </select>
-                    </div>
+                    <div class="col-md-3"><label>Поиск</label><input type="text" name="search" class="form-control" value="{{ search_query }}"></div>
+                    <div class="col-md-2"><label>Статус</label><select name="status" class="form-select"><option value="">Все</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option><option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option><option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option><option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option></select></div>
+                    <div class="col-md-2"><label>Лимит от</label><input type="number" name="limit_min" class="form-control" value="{{ limit_min }}"></div>
+                    <div class="col-md-2"><label>Лимит до</label><input type="number" name="limit_max" class="form-control" value="{{ limit_max }}"></div>
+                    <div class="col-md-3"><label>Дата регистрации</label><select name="date_filter" class="form-select"><option value="">Любая</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
                 </div>
                 <div class="row mt-3">
-                    <div class="col-md-12">
-                        <button type="submit" class="btn btn-primary">Применить фильтр</button>
-                        <a href="/dashboard" class="btn btn-secondary">Сбросить</a>
-                        <button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button>
-                    </div>
+                    <div class="col-md-12"><button type="submit" class="btn btn-primary">Применить фильтр</button><a href="/dashboard" class="btn btn-secondary">Сбросить</a><button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button></div>
                 </div>
             </form>
         </div>
     </div>
-    <!-- Массовые действия -->
-    <div class="mb-3">
-        <button type="button" id="massGiveAttempts" class="btn btn-outline-primary">➕ Выдать +5 прогнозов выбранным</button>
-        <button type="button" id="massActivate" class="btn btn-outline-success">✅ Активировать выбранных</button>
-        <button type="button" id="massBan" class="btn btn-outline-danger">🚫 Забанить выбранных</button>
-    </div>
-    <!-- Таблица пользователей -->
+    <div class="mb-3"><button type="button" id="massGiveAttempts" class="btn btn-outline-primary">➕ Выдать +5 прогнозов выбранным</button><button type="button" id="massActivate" class="btn btn-outline-success">✅ Активировать выбранных</button><button type="button" id="massBan" class="btn btn-outline-danger">🚫 Забанить выбранных</button></div>
     <div class="table-responsive">
         <table class="table table-bordered table-hover" id="usersTable">
-            <thead class="table-dark">
-                <tr><th><input type="checkbox" id="selectAll"></th><th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Username</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th></tr>
-            </thead>
-            <tbody>
-                {% for u in users %}
-                <tr>
-                    <td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td>
-                    <td>{{ u.id }}</td><td>{{ u.telegram_id }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td>
-                    <td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td>
-                    <td>{{ '⭐' if u.is_premium else '—' }}</td>
-                    <td>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button>
-                            <button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button>
-                            <form method="post" action="/approve" style="display:inline;">
-                                <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <input type="number" name="attempts" value="50" style="width:60px; display:inline;">
-                                <button type="submit" class="btn btn-warning btn-sm">Акт.</button>
-                            </form>
-                            <form method="post" action="/ban" style="display:inline;">
-                                <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <button type="submit" class="btn btn-danger btn-sm">Бан</button>
-                            </form>
-                            <form method="post" action="/premium" style="display:inline;">
-                                <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <button type="submit" class="btn btn-secondary btn-sm">Premium</button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+            <thead class="table-dark"><tr><th><input type="checkbox" id="selectAll"></th><th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Username</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th></tr></thead>
+            <tbody>{% for u in users %}<tr><td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td><td>{{ u.id }}</td><td>{{ u.telegram_id }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td>
+            <td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td><td>{{ '⭐' if u.is_premium else '—' }}</td>
+            <td><div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><input type="number" name="attempts" value="50" style="width:60px; display:inline;"><button type="submit" class="btn btn-warning btn-sm">Акт.</button></form><form method="post" action="/ban" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-danger btn-sm">Бан</button></form><form method="post" action="/premium" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-secondary btn-sm">Premium</button></form></div></td>
+            </tr>{% endfor %}</tbody>
         </table>
     </div>
-    <!-- Пагинация -->
     <div class="row mt-3">
-        <div class="col-md-3">
-            <select id="perPageSelect" class="form-select w-auto d-inline-block">
-                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-            </select>
-            <span>записей на странице</span>
-        </div>
-        <div class="col-md-9">
-            <nav><ul class="pagination justify-content-end">
-                {% if page > 1 %}<li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>{% endif %}
-                {% for p in range(1, total_pages+1) %}<li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>{% endfor %}
-                {% if page < total_pages %}<li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>{% endif %}
-            </ul></nav>
-        </div>
+        <div class="col-md-3"><select id="perPageSelect" class="form-select w-auto d-inline-block"><option value="20" {% if per_page == 20 %}selected{% endif %}>20</option><option value="50" {% if per_page == 50 %}selected{% endif %}>50</option><option value="100" {% if per_page == 100 %}selected{% endif %}>100</option></select><span>записей на странице</span></div>
+        <div class="col-md-9"><nav><ul class="pagination justify-content-end">{% if page > 1 %}<li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>{% endif %}{% for p in range(1, total_pages+1) %}<li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>{% endfor %}{% if page < total_pages %}<li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>{% endif %}</ul></nav></div>
     </div>
 </div>
 <script>
@@ -157,6 +49,68 @@
     document.querySelectorAll('.give-attempts').forEach(btn=>{btn.addEventListener('click',function(){let userId=this.dataset.id,attempts=this.dataset.attempts;fetch('/give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,attempts:parseInt(attempts)})}).then(()=>location.reload());});});
     document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
+    // ------------- Мгновенные уведомления о новых лидах -------------
+    (function() {
+        let lastCount = {{ pending_count | default(0) }};
+        const checkPendingUsers = async () => {
+            try {
+                const response = await fetch('/api/pending_users');
+                const data = await response.json();
+                if (data.count === undefined) return;
+                if (data.count > lastCount) {
+                    const newUsers = data.count - lastCount;
+                    showNotification(`📢 Появилось ${newUsers} новых лидов!`, data.users.slice(0, newUsers));
+                    lastCount = data.count;
+                } else if (data.count < lastCount) {
+                    lastCount = data.count;
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        };
+        const showNotification = (message, newUsers) => {
+            const toastContainer = document.getElementById('toast-container') || (() => {
+                const container = document.createElement('div');
+                container.id = 'toast-container';
+                container.style.position = 'fixed';
+                container.style.bottom = '20px';
+                container.style.right = '20px';
+                container.style.zIndex = '1050';
+                document.body.appendChild(container);
+                return container;
+            })();
+            const toast = document.createElement('div');
+            toast.className = 'toast show';
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.style.backgroundColor = '#28a745';
+            toast.style.color = 'white';
+            toast.style.borderRadius = '8px';
+            toast.style.padding = '12px 20px';
+            toast.style.marginTop = '10px';
+            toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            toast.style.cursor = 'pointer';
+            toast.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>${message}</span>
+                    <button type="button" style="background: none; border: none; color: white; font-size: 20px; margin-left: 15px;" onclick="this.parentElement.parentElement.remove()">✖</button>
+                </div>
+            `;
+            toast.onclick = (e) => {
+                if (e.target.tagName !== 'BUTTON') {
+                    window.location.href = '/dashboard';
+                }
+            };
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 8000);
+            try {
+                const audio = new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3');
+                audio.volume = 0.3;
+                audio.play().catch(e => console.log('Audio play blocked'));
+            } catch(e) {}
+        };
+        setInterval(checkPendingUsers, 10000);
+    })();
 </script>
 {% endblock %}
-    
