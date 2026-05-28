@@ -10,39 +10,50 @@
         <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h5 class="card-title">Прогнозов за 24ч</h5><p class="card-text display-6">{{ predictions_today }}</p></div></div></div>
     </div>
     
-    <!-- Аналитика (Этап 2) -->
     <div class="row mb-4">
-        <!-- График активности -->
         <div class="col-md-8">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-header bg-white font-weight-bold">📈 Активность за 7 дней</div>
+            <div class="card h-100 shadow-sm border-0 rounded-4">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center pt-3 pb-0">
+                    <h6 class="mb-0 fw-bold">📈 Динамика платформы</h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="date" id="startDate" class="form-control form-control-sm bg-light border-0 text-secondary" style="width: 120px;">
+                        <span class="text-muted small">-</span>
+                        <input type="date" id="endDate" class="form-control form-control-sm bg-light border-0 text-secondary" style="width: 120px;">
+                        <button class="btn btn-sm btn-primary px-3 rounded-3" onclick="applyCustomDates()">Показать</button>
+                    </div>
+                </div>
                 <div class="card-body">
-                    <canvas id="activityChart" height="100"></canvas>
+                    <canvas id="activityChart" height="250"></canvas>
                 </div>
             </div>
         </div>
-        <!-- Воронка и Мертвые души -->
+        
         <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-header bg-white font-weight-bold">🎯 Конверсия и Удержание</div>
+            <div class="card h-100 shadow-sm border-0 rounded-4">
+                <div class="card-header bg-white border-0 pt-3 pb-0">
+                    <h6 class="mb-0 fw-bold">🎯 Конверсия (за период)</h6>
+                </div>
                 <div class="card-body">
-                    <div class="alert alert-danger mb-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>👻 Мертвые души:</strong> 
-                            <div class="small">Не заходили более 3 дней</div>
+                    <div class="p-3 mb-4 rounded-4" style="background-color: #fff0f0; border-left: 4px solid #dc3545;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-danger fw-bold mb-1">👻 Мертвые души</h6>
+                                <div class="small text-muted" style="font-size: 12px;">Активированы, но не заходили > 3 дней</div>
+                            </div>
+                            <span id="deadSoulsCount" class="fs-3 fw-bold text-danger">0</span>
                         </div>
-                        <span id="deadSoulsCount" class="fs-4 fw-bold text-danger">0</span>
                     </div>
                     
-                    <h6 class="text-muted">Воронка пользователей:</h6>
-                    <div class="mb-1 small d-flex justify-content-between"><span>Регистрации</span> <strong id="funnelReg">0</strong></div>
-                    <div class="progress mb-2" style="height: 10px;"><div id="barReg" class="progress-bar bg-primary" style="width: 100%"></div></div>
+                    <h6 class="text-muted small fw-bold mb-3 text-uppercase">Воронка пользователей</h6>
                     
-                    <div class="mb-1 small d-flex justify-content-between"><span>Активированы</span> <strong id="funnelAct">0</strong></div>
-                    <div class="progress mb-2" style="height: 10px;"><div id="barAct" class="progress-bar bg-success" style="width: 0%"></div></div>
+                    <div class="mb-1 small d-flex justify-content-between fw-semibold"><span>Регистрации</span> <span id="funnelReg">0</span></div>
+                    <div class="progress mb-3 rounded-pill" style="height: 12px;"><div id="barReg" class="progress-bar bg-primary" style="width: 100%"></div></div>
                     
-                    <div class="mb-1 small d-flex justify-content-between"><span>Сделали прогноз</span> <strong id="funnelPred">0</strong></div>
-                    <div class="progress mb-2" style="height: 10px;"><div id="barPred" class="progress-bar bg-warning text-dark" style="width: 0%"></div></div>
+                    <div class="mb-1 small d-flex justify-content-between fw-semibold"><span>Активированы</span> <span id="funnelAct">0</span></div>
+                    <div class="progress mb-3 rounded-pill" style="height: 12px;"><div id="barAct" class="progress-bar bg-success" style="width: 0%"></div></div>
+                    
+                    <div class="mb-1 small d-flex justify-content-between fw-semibold"><span>Сделали прогноз</span> <span id="funnelPred">0</span></div>
+                    <div class="progress rounded-pill" style="height: 12px;"><div id="barPred" class="progress-bar bg-warning text-dark" style="width: 0%"></div></div>
                 </div>
             </div>
         </div>
@@ -157,20 +168,47 @@
     })();
 </script>
 
-<!-- Подключаем библиотеку для графиков -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    let currentChart = null; // Переменная для хранения текущего графика
+
+    // Функция, которая срабатывает при нажатии кнопки "Показать"
+    function applyCustomDates() {
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        if (start && end) {
+            loadAnalytics(start, end);
+        } else {
+            alert('Пожалуйста, выберите обе даты');
+        }
+    }
+
     // Загрузка и отрисовка аналитики
-    async function loadAnalytics() {
+    async function loadAnalytics(startDateStr = null, endDateStr = null) {
+        // Если даты не переданы (при первой загрузке), ставим последние 7 дней
+        if (!startDateStr || !endDateStr) {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - 6);
+            
+            startDateStr = start.toISOString().split('T')[0];
+            endDateStr = end.toISOString().split('T')[0];
+            
+            // Вставляем эти даты в поля календариков
+            document.getElementById('startDate').value = startDateStr;
+            document.getElementById('endDate').value = endDateStr;
+        }
+
         try {
-            const res = await fetch('/api/analytics');
+            // Запрашиваем данные у сервера с учетом выбранных дат
+            const res = await fetch(`/api/analytics?start_date=${startDateStr}&end_date=${endDateStr}`);
             if (!res.ok) return;
             const data = await res.json();
             
             // Заполняем "Мертвые души"
             document.getElementById('deadSoulsCount').innerText = data.dead_souls;
             
-            // Заполняем Воронку (считаем проценты)
+            // Заполняем Воронку (Высчитываем проценты)
             const reg = data.funnel.registered;
             const act = data.funnel.activated;
             const pred = data.funnel.predicted;
@@ -182,31 +220,64 @@
             if (reg > 0) {
                 document.getElementById('barAct').style.width = `${(act/reg)*100}%`;
                 document.getElementById('barPred').style.width = `${(pred/reg)*100}%`;
+            } else {
+                document.getElementById('barAct').style.width = `0%`;
+                document.getElementById('barPred').style.width = `0%`;
             }
 
-            // Рисуем график
+            // --- ОТРИСОВКА PREMIUM ГРАФИКА ---
             const ctx = document.getElementById('activityChart').getContext('2d');
-            new Chart(ctx, {
+            
+            if (currentChart) {
+                currentChart.destroy(); // Уничтожаем старый график перед отрисовкой нового
+            }
+
+            // Создаем градиенты для заливки под линией
+            const gradientBlue = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientBlue.addColorStop(0, 'rgba(13, 110, 253, 0.4)');
+            gradientBlue.addColorStop(1, 'rgba(13, 110, 253, 0.0)');
+
+            const gradientTeal = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientTeal.addColorStop(0, 'rgba(13, 202, 240, 0.4)');
+            gradientTeal.addColorStop(1, 'rgba(13, 202, 240, 0.0)');
+
+            // Форматируем даты для красоты (из "2026-05-29" в "29 Мая")
+            const formattedDates = data.chart.dates.map(dateStr => {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+            });
+
+            currentChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.chart.dates,
+                    labels: formattedDates,
                     datasets: [
                         {
                             label: 'Регистрации',
                             data: data.chart.registrations,
                             borderColor: '#0d6efd',
-                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                            borderWidth: 2,
-                            tension: 0.3,
+                            backgroundColor: gradientBlue,
+                            borderWidth: 3,           
+                            tension: 0.4,             // Плавные изгибы
+                            pointRadius: 0,           // Скрываем точки
+                            pointHoverRadius: 6,      // Показываем точку только при наведении мыши
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#0d6efd',
+                            pointBorderWidth: 2,
                             fill: true
                         },
                         {
                             label: 'Прогнозы',
                             data: data.chart.predictions,
                             borderColor: '#0dcaf0',
-                            backgroundColor: 'rgba(13, 202, 240, 0.1)',
-                            borderWidth: 2,
-                            tension: 0.3,
+                            backgroundColor: gradientTeal,
+                            borderWidth: 3,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#0dcaf0',
+                            pointBorderWidth: 2,
                             fill: true
                         }
                     ]
@@ -214,8 +285,18 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top' } },
-                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                    interaction: {
+                        mode: 'index',
+                        intersect: false, 
+                    },
+                    plugins: { 
+                        legend: { position: 'top', align: 'end', labels: { boxWidth: 12, usePointStyle: true } },
+                        tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', padding: 12, cornerRadius: 8 }
+                    },
+                    scales: { 
+                        x: { grid: { display: false } }, // Убираем вертикальную сетку
+                        y: { beginAtZero: true, ticks: { precision: 0, padding: 10 }, border: { display: false }, grid: { color: '#f0f0f0', drawTicks: false } }
+                    }
                 }
             });
         } catch(e) {
@@ -223,7 +304,7 @@
         }
     }
     
-    // Вызываем функцию при загрузке страницы
-    document.addEventListener('DOMContentLoaded', loadAnalytics);
+    // Вызываем функцию при первой загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => loadAnalytics());
 </script>
 {% endblock %}

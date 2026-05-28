@@ -1048,45 +1048,66 @@ async def stream_leads(request: Request, db: Session = Depends(get_db)):
             "X-Accel-Buffering": "no"
         }
     )
- # ---------- Аналитика (Этап 2) ----------
+
+# ---------- Аналитика (Этап 2) ----------
 @app.get("/api/analytics")
-async def get_analytics(request: Request, db: Session = Depends(get_db)):
+async def get_analytics(
+    request: Request, 
+    start_date: str = Query(None), 
+    end_date: str = Query(None), 
+    db: Session = Depends(get_db)
+):
     staff = await get_current_staff(request, db)
     if not staff:
         return {"error": "Unauthorized"}
         
-    # 1. Воронка конверсии
-    registered = db.query(User).count()
-    activated = db.query(User).filter(User.is_active == True).count()
-    predicted = db.query(PredictionLog.user_id).distinct().count()
+    now = datetime.utcnow()
+    # 1. Парсим даты из календарика. Если их нет — берем последние 7 дней по умолчанию
+    if start_date and end_date:
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+        except ValueError:
+            start_dt = now - timedelta(days=6)
+            end_dt = now
+    else:
+        start_dt = now - timedelta(days=6)
+        end_dt = now
+
+    # 2. Воронка конверсии (СТРОГО ЗА ВЫБРАННЫЙ ПЕРИОД)
+    registered = db.query(User).filter(User.created_at >= start_dt, User.created_at <= end_dt).count()
+    activated = db.query(User).filter(User.is_active == True, User.created_at >= start_dt, User.created_at <= end_dt).count()
+    predicted = db.query(PredictionLog.user_id).filter(PredictionLog.created_at >= start_dt, PredictionLog.created_at <= end_dt).distinct().count()
     
-    # 2. Мертвые души (не заходили больше 3 дней, но активированы)
-    three_days_ago = datetime.utcnow() - timedelta(days=3)
+    # 3. Мертвые души (Это всегда текущий снимок базы, не зависит от календаря)
+    three_days_ago = now - timedelta(days=3)
     dead_souls = db.query(User).filter(
         User.is_active == True,
         (User.last_activity < three_days_ago) | (User.last_activity == None)
     ).count()
     
-    # 3. Активность за последние 7 дней
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    # 4. Собираем активность для графика за выбранный период
+    users_period = db.query(User).filter(User.created_at >= start_dt, User.created_at <= end_dt).all()
+    logs_period = db.query(PredictionLog).filter(PredictionLog.created_at >= start_dt, PredictionLog.created_at <= end_dt).all()
     
-    users_7d = db.query(User).filter(User.created_at >= seven_days_ago).all()
-    logs_7d = db.query(PredictionLog).filter(PredictionLog.created_at >= seven_days_ago).all()
-    
-    # Группируем по датам прямо в Python (чтобы не было конфликтов диалектов SQL)
     reg_dict = {}
-    for u in users_7d:
+    for u in users_period:
         if u.created_at:
             d = u.created_at.strftime('%Y-%m-%d')
             reg_dict[d] = reg_dict.get(d, 0) + 1
             
     pred_dict = {}
-    for log in logs_7d:
+    for log in logs_period:
         if log.created_at:
             d = log.created_at.strftime('%Y-%m-%d')
             pred_dict[d] = pred_dict.get(d, 0) + 1
             
-    dates = [(datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
+    # Генерируем массив всех дат от start_dt до end_dt
+    delta_days = (end_dt - start_dt).days
+    if delta_days < 0: delta_days = 0
+    if delta_days > 365: delta_days = 365 # Защита, чтобы график не завис при выборе 10 лет
+    
+    dates = [(start_dt + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(delta_days + 1)]
     
     return {
         "funnel": {"registered": registered, "activated": activated, "predicted": predicted},
@@ -1096,7 +1117,8 @@ async def get_analytics(request: Request, db: Session = Depends(get_db)):
             "registrations": [reg_dict.get(d, 0) for d in dates],
             "predictions": [pred_dict.get(d, 0) for d in dates]
         }
-    }   
+    }
+
 # ---------- Эндпоинт регистрации ----------
 @app.get("/register_request")
 async def register_request(bet_id: str, init_data: str = Query(None), source: str = Query(None), db: Session = Depends(get_db)):
