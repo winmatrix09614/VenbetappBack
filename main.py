@@ -27,7 +27,6 @@ if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
 
 # ---- Google Gemini SDK ----
 from google import genai
-
 import requests
 import feedparser
 
@@ -45,16 +44,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from pydantic import BaseModel
-from google.genai import types
-
-class MatchInfo(BaseModel):
-    team1: str
-    team2: str
+from google.genai import types as genai_types
 import uvicorn
 
 # ---------- Gemini ----------
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-2.5-flash"  
+MODEL_NAME = "gemini-2.5-flash"
 
 # ---------- Кэш для статистики команд ----------
 team_stats_cache = OrderedDict()
@@ -418,7 +413,7 @@ async def process_match_text(message: types.Message, state: FSMContext):
 
 @dp.message(F.text == "📰 Новости")
 async def news(message: types.Message):
-    feed = feedparser.parse("https://news.sportbox.ru/rss")  # заглушка, но фактически новости через API
+    feed = feedparser.parse("https://news.sportbox.ru/rss")
     if not feed.entries:
         await message.answer("Новости временно недоступны.")
         return
@@ -538,7 +533,7 @@ with open("templates/users.html", "w", encoding="utf-8") as f:
             <tbody>{% for u in users %}<tr><td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td><td>{{ u.id }}</td><td>{{ u.telegram_id }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td><td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td><td>{{ '⭐' if u.is_premium else '—' }}</td>
             <td><div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><input type="number" name="attempts" value="50" style="width:60px; display:inline;"><button type="submit" class="btn btn-warning btn-sm">Акт.</button></form><form method="post" action="/ban" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-danger btn-sm">Бан</button></form><form method="post" action="/premium" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" class="btn btn-secondary btn-sm">Premium</button></form></div></td>
             </tr>{% endfor %}</tbody>
-        </table>
+        <tr>
     </div>
     <div class="row mt-3">
         <div class="col-md-3"><select id="perPageSelect" class="form-select w-auto d-inline-block"><option value="20" {% if per_page == 20 %}selected{% endif %}>20</option><option value="50" {% if per_page == 50 %}selected{% endif %}>50</option><option value="100" {% if per_page == 100 %}selected{% endif %}>100</option></select><span>записей на странице</span></div>
@@ -812,6 +807,10 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     return response
 
 # ---------- Эндпоинты для WebApp (Mini App) ----------
+class MatchInfo(BaseModel):
+    team1: str
+    team2: str
+
 @app.post("/webapp/predict")
 async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo: UploadFile = File(None)):
     db = SessionLocal()
@@ -830,27 +829,23 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
 
     if photo:
         try:
-            # Читаем байты напрямую (без сохранения на диск)
             photo_bytes = await photo.read()
-            # Оборачиваем байты в Part
-            image_part = types.Part.from_bytes(
+            image_part = genai_types.Part.from_bytes(
                 data=photo_bytes,
                 mime_type=photo.content_type or "image/png",
             )
-            # Вызываем актуальную модель Gemini
             response = client.models.generate_content(
-                model="gemini-3.5-flash",  # если не сработает, замените на gemini-2.5-flash
+                model="gemini-2.5-flash",
                 contents=[
                     image_part,
                     "Extract football team names from this screenshot. Return only the team names, no extra text."
                 ],
-                config=types.GenerateContentConfig(
+                config=genai_types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=MatchInfo,
                     temperature=0.1
                 )
             )
-            # Парсим ответ
             data = json.loads(response.text)
             team1 = data.get("team1", "").strip()
             team2 = data.get("team2", "").strip()
@@ -875,7 +870,6 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         db.close()
         return {"error": "Could not determine team names."}
 
-    # -------- ПОЛУЧАЕМ СТАТИСТИКУ И ПРОГНОЗ --------
     stats1 = await get_team_stats(team1)
     stats2 = await get_team_stats(team2)
     pred = calculate_prediction(stats1, stats2)
@@ -905,32 +899,22 @@ async def webapp_news():
     current_time = time.time()
     if current_time - news_cache["last_update"] < NEWS_CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
-
     try:
-        # Если у вас уже есть код получения RSS - используйте его.
-        # Здесь пример с Google News RSS (испанский).
         rss_url = "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=es-419&gl=US&ceid=US:es-419"
         feed = feedparser.parse(rss_url)
-        
         news_list = []
-        for entry in feed.entries[:15]:  # Берём 15 новостей
-            # Берём описание (summary) или description, если нет summary
+        for entry in feed.entries[:15]:
             description = entry.get('summary', entry.get('description', ''))
-            # Удаляем HTML-теги из описания (они там часто есть)
             if description:
-                import re
                 description = re.sub(r'<.*?>', '', description)
-                # Обрезаем до 120 символов + многоточие
                 if len(description) > 120:
                     description = description[:117] + '...'
-            
             news_list.append({
                 "title": entry.title,
                 "link": entry.link,
                 "pubDate": entry.get('published', datetime.now().isoformat()),
                 "description": description if description else "Нет описания"
             })
-        
         news_cache["data"] = news_list
         news_cache["last_update"] = current_time
         return {"news": news_list}
