@@ -169,11 +169,14 @@ def _fallback_stats():
 
 async def get_team_stats(team_name: str) -> dict:
     """Получает реальную статистику команды через API-Football."""
-    # Здесь можно оставить ваш кэш (если он был)
+    print(f"[DEBUG] get_team_stats called for team: {team_name}")
+    print(f"[DEBUG] API_FOOTBALL_KEY is {'set' if API_FOOTBALL_KEY else 'NOT SET'}")
+
     cache_key = team_name.lower().strip()
     if cache_key in team_stats_cache:
         cached_data, cached_time = team_stats_cache[cache_key]
         if time.time() - cached_time < CACHE_TTL:
+            print(f"[DEBUG] Returning cached data for {team_name}")
             return cached_data
 
     headers = {
@@ -182,26 +185,36 @@ async def get_team_stats(team_name: str) -> dict:
     }
 
     async with aiohttp.ClientSession() as session:
-        # 1. Поиск ID команды по названию
-        async with session.get(f'https://v3.football.api-sports.io/teams?search={team_name}', headers=headers) as resp:
+        # 1. Поиск ID команды
+        url = f'https://v3.football.api-sports.io/teams?search={team_name}'
+        print(f"[DEBUG] Requesting {url}")
+        async with session.get(url, headers=headers) as resp:
+            print(f"[DEBUG] Response status: {resp.status}")
             if resp.status != 200:
+                print(f"[DEBUG] API returned status {resp.status}, using fallback")
                 return _fallback_stats()
             data = await resp.json()
-            if not data['response']:
+            print(f"[DEBUG] API response: {data}")
+            if not data.get('response'):
+                print(f"[DEBUG] No team found for {team_name}, using fallback")
                 return _fallback_stats()
             team_id = data['response'][0]['team']['id']
+            print(f"[DEBUG] Found team {team_name} with ID {team_id}")
 
         # 2. Получение последних 5 матчей
-        async with session.get(f'https://v3.football.api-sports.io/fixtures?team={team_id}&last=5', headers=headers) as resp:
+        fixtures_url = f'https://v3.football.api-sports.io/fixtures?team={team_id}&last=5'
+        async with session.get(fixtures_url, headers=headers) as resp:
             if resp.status != 200:
+                print(f"[DEBUG] Fixtures API error: {resp.status}, using fallback")
                 return _fallback_stats()
             data = await resp.json()
-            fixtures = data['response']
+            fixtures = data.get('response', [])
+            print(f"[DEBUG] Got {len(fixtures)} fixtures")
 
         if not fixtures:
+            print("[DEBUG] No fixtures, using fallback")
             return _fallback_stats()
 
-        # 3. Анализ результатов
         last_5_results = []
         for match in fixtures:
             if match['fixture']['status']['short'] != 'FT':
@@ -227,13 +240,11 @@ async def get_team_stats(team_name: str) -> dict:
 
         result = {
             "last_5": last_5_results,
-            "injuries": [],       # травмы в бесплатной версии не доступны
+            "injuries": [],
             "home_advantage": 0.1
         }
-        # Сохраняем в кэш (если у вас есть кэш)
         team_stats_cache[cache_key] = (result, time.time())
-        if len(team_stats_cache) > 100:
-            team_stats_cache.popitem(last=False)
+        print(f"[DEBUG] Returning result: {result}")
         return result
 
 def calculate_prediction(stats1: dict, stats2: dict) -> dict:
