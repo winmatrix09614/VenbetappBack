@@ -90,9 +90,7 @@
             if (eventSource) {
                 eventSource.close();
             }
-            // Добавляем случайный параметр, чтобы избежать кэширования
             eventSource = new EventSource('/api/stream_leads?t=' + new Date().getTime());
-            
             eventSource.addEventListener('update', function(event) {
                 try {
                     const data = JSON.parse(event.data);
@@ -107,9 +105,8 @@
                     console.error('SSE parse error', e);
                 }
             });
-            
             eventSource.onerror = function(e) {
-                console.error('SSE connection error, reconnecting in 5s', e);
+                console.error('SSE error, reconnecting in 5s', e);
                 eventSource.close();
                 setTimeout(connectSSE, 5000);
             };
