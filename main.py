@@ -168,7 +168,7 @@ def _fallback_stats():
     return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": ["Данные временно недоступны"], "home_advantage": 0.0}
 
 async def get_team_stats(team_name: str) -> dict:
-    """Получает реальную статистику команды через API-Football."""
+    """Получает реальную статистику команды через API-Football (по датам)."""
     print(f"[DEBUG] get_team_stats called for team: {team_name}")
     print(f"[DEBUG] API_FOOTBALL_KEY is {'set' if API_FOOTBALL_KEY else 'NOT SET'}")
 
@@ -189,40 +189,53 @@ async def get_team_stats(team_name: str) -> dict:
         url = f'https://v3.football.api-sports.io/teams?search={team_name}'
         print(f"[DEBUG] Requesting {url}")
         async with session.get(url, headers=headers) as resp:
-            print(f"[DEBUG] Response status: {resp.status}")
             if resp.status != 200:
                 print(f"[DEBUG] API returned status {resp.status}, using fallback")
                 return _fallback_stats()
             data = await resp.json()
-            print(f"[DEBUG] API response: {data}")
             if not data.get('response'):
                 print(f"[DEBUG] No team found for {team_name}, using fallback")
                 return _fallback_stats()
+            # Берём первую команду (обычно это основная)
             team_id = data['response'][0]['team']['id']
             print(f"[DEBUG] Found team {team_name} with ID {team_id}")
 
-        # 2. Получение последних 5 матчей
-        fixtures_url = f'https://v3.football.api-sports.io/fixtures?team={team_id}&last=5'
-        async with session.get(fixtures_url, headers=headers) as resp:
+        # 2. Получение матчей за последние 365 дней
+        today = datetime.now()
+        one_year_ago = today - timedelta(days=365)
+        params = {
+            "team": team_id,
+            "from": one_year_ago.strftime("%Y-%m-%d"),
+            "to": today.strftime("%Y-%m-%d"),
+            "status": "FT"  # только завершённые матчи
+        }
+        fixtures_url = 'https://v3.football.api-sports.io/fixtures'
+        print(f"[DEBUG] Requesting fixtures for last 365 days")
+        async with session.get(fixtures_url, headers=headers, params=params) as resp:
             if resp.status != 200:
                 print(f"[DEBUG] Fixtures API error: {resp.status}, using fallback")
                 return _fallback_stats()
             data = await resp.json()
             fixtures = data.get('response', [])
-            print(f"[DEBUG] Got {len(fixtures)} fixtures")
+            print(f"[DEBUG] Got {len(fixtures)} fixtures in total")
 
-        if not fixtures:
-            print("[DEBUG] No fixtures, using fallback")
+        # Сортируем по убыванию даты (самые новые первыми)
+        fixtures.sort(key=lambda x: x['fixture']['date'], reverse=True)
+        # Берём последние 5
+        last_5 = fixtures[:5]
+        if not last_5:
+            print("[DEBUG] No fixtures in last year, using fallback")
             return _fallback_stats()
 
+        # 3. Анализ результатов
         last_5_results = []
-        for match in fixtures:
-            if match['fixture']['status']['short'] != 'FT':
-                continue
+        for match in last_5:
             home_team_id = match['teams']['home']['id']
             away_team_id = match['teams']['away']['id']
             home_goals = match['goals']['home']
             away_goals = match['goals']['away']
+            if home_goals is None or away_goals is None:
+                continue
             if home_team_id == team_id:
                 if home_goals > away_goals:
                     last_5_results.append(1)
@@ -238,13 +251,20 @@ async def get_team_stats(team_name: str) -> dict:
                 else:
                     last_5_results.append(0.5)
 
+        if not last_5_results:
+            print("[DEBUG] No valid fixtures with scores, using fallback")
+            return _fallback_stats()
+
         result = {
             "last_5": last_5_results,
             "injuries": [],
             "home_advantage": 0.1
         }
+        # Сохраняем в кэш
         team_stats_cache[cache_key] = (result, time.time())
-        print(f"[DEBUG] Returning result: {result}")
+        if len(team_stats_cache) > 100:
+            team_stats_cache.popitem(last=False)
+        print(f"[DEBUG] Returning real result: {result}")
         return result
 
 def calculate_prediction(stats1: dict, stats2: dict) -> dict:
