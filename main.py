@@ -8,6 +8,7 @@ import time
 import csv
 import cloudscraper
 import requests
+import aiohttp  # добавьте этот импорт в начало файла
 
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
@@ -20,9 +21,9 @@ load_dotenv()
 # ---------- Переменные окружения ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-ALLSPORTS_API_KEY = os.getenv("ALLSPORTS_API_KEY")
+API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY")
 
-if not all([BOT_TOKEN, GEMINI_API_KEY, ALLSPORTS_API_KEY]):
+if not all([BOT_TOKEN, GEMINI_API_KEY, API_FOOTBALL_KEY]):
     print("⚠️ Предупреждение: не все основные переменные окружения заданы. Бот может работать некорректно.")
 
 # ---- Google Gemini SDK ----
@@ -168,58 +169,73 @@ def _fallback_stats():
     return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": ["Данные временно недоступны"], "home_advantage": 0.0}
 
 async def get_team_stats(team_name: str) -> dict:
+    """Получает реальную статистику команды через API-Football."""
+    # Здесь можно оставить ваш кэш (если он был)
     cache_key = team_name.lower().strip()
     if cache_key in team_stats_cache:
         cached_data, cached_time = team_stats_cache[cache_key]
         if time.time() - cached_time < CACHE_TTL:
             return cached_data
-    search_url = f"https://allsportsapi.com/api/football/?met=Teams&teamName={team_name}&APIkey={ALLSPORTS_API_KEY}"
-    try:
-        resp = requests.get(search_url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if not data.get('result'):
-            return _fallback_stats()
-        team = data['result'][0]
-        team_id = team['team_key']
-        team_name_api = team['team_name']
-        print(f"[API] Found team: {team_name_api} (ID: {team_id})")
-    except Exception as e:
-        print(f"[API Error] Search '{team_name}': {e}")
-        return _fallback_stats()
-    fixtures_url = f"https://allsportsapi.com/api/football/?met=Fixtures&teamId={team_id}&APIkey={ALLSPORTS_API_KEY}"
-    try:
-        resp = requests.get(fixtures_url, timeout=10)
-        resp.raise_for_status()
-        fixtures_data = resp.json()
-        fixtures = fixtures_data.get('result', [])
+
+    headers = {
+        'x-apisports-key': API_FOOTBALL_KEY,
+        'x-apisports-host': 'v3.football.api-sports.io'
+    }
+
+    async with aiohttp.ClientSession() as session:
+        # 1. Поиск ID команды по названию
+        async with session.get(f'https://v3.football.api-sports.io/teams?search={team_name}', headers=headers) as resp:
+            if resp.status != 200:
+                return _fallback_stats()
+            data = await resp.json()
+            if not data['response']:
+                return _fallback_stats()
+            team_id = data['response'][0]['team']['id']
+
+        # 2. Получение последних 5 матчей
+        async with session.get(f'https://v3.football.api-sports.io/fixtures?team={team_id}&last=5', headers=headers) as resp:
+            if resp.status != 200:
+                return _fallback_stats()
+            data = await resp.json()
+            fixtures = data['response']
+
         if not fixtures:
             return _fallback_stats()
-    except Exception as e:
-        print(f"[API Error] Fixtures for {team_name_api}: {e}")
-        return _fallback_stats()
-    last_5_results = []
-    for match in fixtures[:5]:
-        home_team_id = str(match.get('home_team_id'))
-        away_team_id = str(match.get('away_team_id'))
-        home_score = match.get('match_hometeam_score')
-        away_score = match.get('match_awayteam_score')
-        if home_score is None or away_score is None:
-            result = 0.5
-        elif int(home_score) > int(away_score):
-            result = 1 if home_team_id == str(team_id) else 0
-        elif int(home_score) < int(away_score):
-            result = 1 if away_team_id == str(team_id) else 0
-        else:
-            result = 0.5
-        last_5_results.append(result)
-    if not last_5_results:
-        return _fallback_stats()
-    result = {"last_5": last_5_results, "injuries": [], "home_advantage": 0.1}
-    team_stats_cache[cache_key] = (result, time.time())
-    if len(team_stats_cache) > 100:
-        team_stats_cache.popitem(last=False)
-    return result
+
+        # 3. Анализ результатов
+        last_5_results = []
+        for match in fixtures:
+            if match['fixture']['status']['short'] != 'FT':
+                continue
+            home_team_id = match['teams']['home']['id']
+            away_team_id = match['teams']['away']['id']
+            home_goals = match['goals']['home']
+            away_goals = match['goals']['away']
+            if home_team_id == team_id:
+                if home_goals > away_goals:
+                    last_5_results.append(1)
+                elif home_goals < away_goals:
+                    last_5_results.append(0)
+                else:
+                    last_5_results.append(0.5)
+            else:
+                if away_goals > home_goals:
+                    last_5_results.append(1)
+                elif away_goals < home_goals:
+                    last_5_results.append(0)
+                else:
+                    last_5_results.append(0.5)
+
+        result = {
+            "last_5": last_5_results,
+            "injuries": [],       # травмы в бесплатной версии не доступны
+            "home_advantage": 0.1
+        }
+        # Сохраняем в кэш (если у вас есть кэш)
+        team_stats_cache[cache_key] = (result, time.time())
+        if len(team_stats_cache) > 100:
+            team_stats_cache.popitem(last=False)
+        return result
 
 def calculate_prediction(stats1: dict, stats2: dict) -> dict:
     wins1 = sum(1 for r in stats1['last_5'] if r == 1)
