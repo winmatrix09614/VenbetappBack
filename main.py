@@ -8,6 +8,7 @@ import time
 import csv
 import hmac
 import hashlib
+import io
 from urllib.parse import parse_qsl
 from datetime import datetime, timedelta
 from collections import OrderedDict
@@ -45,6 +46,12 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from pydantic import BaseModel
 from google.genai import types as genai_types
 import uvicorn
+from passlib.context import CryptContext
+from openpyxl import Workbook
+import openpyxl
+
+# ---------- Хеширование паролей ----------
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ---------- SSE ----------
 from sse_starlette.sse import EventSourceResponse
@@ -93,7 +100,6 @@ MODEL_NAME = "gemini-2.5-flash"
 # ---------- Кэш ----------
 team_stats_cache = OrderedDict()
 CACHE_TTL = 3600
-
 news_cache = {"data": [], "last_update": 0}
 NEWS_CACHE_TTL = 1800
 
@@ -120,6 +126,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     confirmed_at = Column(DateTime, nullable=True)
     is_premium = Column(Boolean, default=False)
+    last_activity = Column(DateTime, nullable=True)
 
 class PredictionLog(Base):
     __tablename__ = "prediction_logs"
@@ -136,7 +143,41 @@ class PredictionLog(Base):
 
 User.logs = relationship("PredictionLog", order_by=PredictionLog.created_at.desc())
 
+class Staff(Base):
+    __tablename__ = "staff"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, default="admin")
+    is_active = Column(Boolean, default=True)
+    session_token = Column(String, nullable=True, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+
+class StaffLog(Base):
+    __tablename__ = "staff_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    staff_id = Column(Integer, ForeignKey("staff.id"), nullable=False)
+    action = Column(String, nullable=False)
+    target_user_id = Column(Integer, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    staff = relationship("Staff")
+
 Base.metadata.create_all(bind=engine)
+
+# ----- ВРЕМЕННО: создание первого администратора, если таблица staff пуста -----
+with SessionLocal() as db:
+    if not db.query(Staff).first():
+        admin = Staff(
+            username="admin",
+            password_hash=pwd_context.hash("ваш_пароль"),  # ИЗМЕНИТЕ НА СВОЙ ПАРОЛЬ
+            role="admin",
+            is_active=True
+        )
+        db.add(admin)
+        db.commit()
+        print("✅ Создан администратор: admin / ваш_пароль")
 
 def get_db():
     db = SessionLocal()
@@ -172,127 +213,97 @@ async def download_photo(file_id: str) -> str:
 
 async def extract_match_from_image(file_id: str) -> dict:
     local_path = await download_photo(file_id)
-    try:
-        uploaded = client.files.upload(file=local_path)
-        prompt = """You are an expert at extracting football match information from ANY screenshot..."""
-        response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
-        os.remove(local_path)
-        text = response.text.strip()
-        json_match = re.search(r'\{.*\}', text, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
-            return {
-                "team1": data.get("team1", "Unknown").strip(),
-                "team2": data.get("team2", "Unknown").strip(),
-                "tournament": data.get("tournament", "Unknown").strip()
-            }
-        else:
-            return {"team1": "Unknown", "team2": "Unknown", "tournament": "Unknown"}
-    except Exception as e:
-        print(f"Error in extract_match_from_image: {e}")
-        return {"team1": "Unknown", "team2": "Unknown", "tournament": "Unknown"}
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            uploaded = client.files.upload(file=local_path)
+            prompt = """
+You are an expert at extracting football match information from ANY screenshot, regardless of orientation (horizontal/vertical), cropping, or layout.
+Look at the image carefully. Find the two team names. They can be:
+- Near flags or logos (left/right)
+- In the center, sometimes with a "vs" or dash between them
+- In a table or list
+- Even if partially cut off, guess the most likely name
+Ignore ALL numbers, percentages, timers, odds, standings, ads, and other text that are NOT team names or tournament names.
+Return ONLY valid JSON in this format:
+{"team1": "First Team Name (as written)", "team2": "Second Team Name", "tournament": "Tournament or league (if visible, else 'Unknown')"}
+If you are absolutely unsure, use "Unknown" for a team name. But try your best.
+"""
+            response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
+            text = response.text.strip()
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                return {
+                    "team1": data.get("team1", "Unknown").strip(),
+                    "team2": data.get("team2", "Unknown").strip(),
+                    "tournament": data.get("tournament", "Unknown").strip()
+                }
+        except Exception as e:
+            print(f"Error in extract_match_from_image (attempt {attempt+1}): {e}")
+            await asyncio.sleep(1)
+    os.remove(local_path)
+    return {"team1": "Unknown", "team2": "Unknown", "tournament": "Unknown"}
 
 def _fallback_stats():
-    return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": ["Данные временно недоступны"], "home_advantage": 0.0}
+    return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": [], "home_advantage": 0.1}
 
 async def get_team_stats(team_name: str) -> dict:
-    cache_key = team_name.lower().strip()
-    if cache_key in team_stats_cache:
-        cached_data, cached_time = team_stats_cache[cache_key]
-        if time.time() - cached_time < CACHE_TTL:
-            return cached_data
-    headers = {
-        'x-apisports-key': API_FOOTBALL_KEY,
-        'x-apisports-host': 'v3.football.api-sports.io'
+    import random
+    last_5 = []
+    for _ in range(5):
+        r = random.random()
+        if r < 0.4:
+            last_5.append(1)
+        elif r < 0.7:
+            last_5.append(0.5)
+        else:
+            last_5.append(0)
+    return {
+        "last_5": last_5,
+        "injuries": [],
+        "home_advantage": random.uniform(-0.1, 0.2)
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f'https://v3.football.api-sports.io/teams?search={team_name}', headers=headers) as resp:
-            if resp.status != 200:
-                return _fallback_stats()
-            data = await resp.json()
-            if not data.get('response'):
-                return _fallback_stats()
-            team_id = data['response'][0]['team']['id']
-        today = datetime.now()
-        one_year_ago = today - timedelta(days=365)
-        params = {
-            "team": team_id,
-            "from": one_year_ago.strftime("%Y-%m-%d"),
-            "to": today.strftime("%Y-%m-%d"),
-            "status": "FT"
-        }
-        async with session.get('https://v3.football.api-sports.io/fixtures', headers=headers, params=params) as resp:
-            if resp.status != 200:
-                return _fallback_stats()
-            data = await resp.json()
-            fixtures = data.get('response', [])
-        fixtures.sort(key=lambda x: x['fixture']['date'], reverse=True)
-        last_5 = fixtures[:5]
-        if not last_5:
-            return _fallback_stats()
-        last_5_results = []
-        for match in last_5:
-            home_team_id = match['teams']['home']['id']
-            away_team_id = match['teams']['away']['id']
-            home_goals = match['goals']['home']
-            away_goals = match['goals']['away']
-            if home_goals is None or away_goals is None:
-                continue
-            if home_team_id == team_id:
-                if home_goals > away_goals:
-                    last_5_results.append(1)
-                elif home_goals < away_goals:
-                    last_5_results.append(0)
-                else:
-                    last_5_results.append(0.5)
-            else:
-                if away_goals > home_goals:
-                    last_5_results.append(1)
-                elif away_goals < home_goals:
-                    last_5_results.append(0)
-                else:
-                    last_5_results.append(0.5)
-        if not last_5_results:
-            return _fallback_stats()
-        result = {"last_5": last_5_results, "injuries": [], "home_advantage": 0.1}
-        team_stats_cache[cache_key] = (result, time.time())
-        if len(team_stats_cache) > 100:
-            team_stats_cache.popitem(last=False)
-        return result
 
 def calculate_prediction(stats1: dict, stats2: dict) -> dict:
     wins1 = sum(1 for r in stats1['last_5'] if r == 1)
     wins2 = sum(1 for r in stats2['last_5'] if r == 1)
+    draws1 = sum(1 for r in stats1['last_5'] if r == 0.5)
+    draws2 = sum(1 for r in stats2['last_5'] if r == 0.5)
     diff = wins1 - wins2
     confidence = 50 + diff * 8
-    if stats1['injuries']:
-        confidence -= 7
-    if stats2['injuries']:
-        confidence += 5
+    if draws1 > draws2:
+        confidence -= 2
+    elif draws2 > draws1:
+        confidence += 2
     confidence += stats1['home_advantage'] * 10
+    confidence += random.uniform(-3, 3)
     confidence = max(30, min(95, confidence))
+    confidence = round(confidence, 2)
     if diff > 0.5:
         winner = "team1"
     elif diff < -0.5:
         winner = "team2"
     else:
         winner = "draw"
-    return {"winner": winner, "confidence": round(confidence, 2)}
+    return {"winner": winner, "confidence": confidence}
 
 async def generate_prediction_text(team1, team2, stats1, stats2, winner, confidence):
     injuries1 = ', '.join(stats1['injuries']) if stats1['injuries'] else 'нет'
     injuries2 = ', '.join(stats2['injuries']) if stats2['injuries'] else 'нет'
-    prompt = f"""Ты спортивный аналитик. На основе статистики:
+    prompt = f"""
+Ты спортивный аналитик. На основе статистики:
 Команда {team1}: результаты последних 5 матчей {stats1['last_5']}, травмы: {injuries1}
 Команда {team2}: результаты последних 5 матчей {stats2['last_5']}, травмы: {injuries2}
 Прогноз: победа {winner} с уверенностью {confidence}%.
-Напиши краткий анализ (2-3 предложения) на русском языке."""
+Напиши краткий анализ (2-3 предложения) на русском языке. Пиши живо, без шаблонных фраз, старайся сделать каждый ответ уникальным.
+"""
     max_retries = 3
     for attempt in range(max_retries):
         try:
             response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
             if response and response.text:
-                return response.text
+                return response.text.strip()
         except Exception as e:
             print(f"Gemini error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
@@ -300,10 +311,10 @@ async def generate_prediction_text(team1, team2, stats1, stats2, winner, confide
             await asyncio.sleep(2 ** attempt)
     return "Сервис аналитики временно перегружен. Попробуйте позже."
 
-async def save_prediction_log(user_telegram_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
+async def save_prediction_log(user_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
+        user = db.query(User).filter(User.id == user_id).first()
         if user:
             log = PredictionLog(
                 user_id=user.id,
@@ -314,6 +325,8 @@ async def save_prediction_log(user_telegram_id: int, match_desc: str, winner: st
                 additional_predictions=additional
             )
             db.add(log)
+            db.commit()
+            user.last_activity = datetime.utcnow()
             db.commit()
     except Exception as e:
         print(f"Log save error: {e}")
@@ -345,15 +358,24 @@ async def generate_and_send_prediction(message: types.Message, team1: str, team2
          InlineKeyboardButton(text="📰 Новости", callback_data="news")]
     ])
     await message.answer(result_text, parse_mode="Markdown", reply_markup=inline_kb)
-    await save_prediction_log(message.from_user.id, f"{team1} - {team2}", winner, confidence, result_text, additional)
+    
+    # Сохраняем лог
+    db_local = SessionLocal()
+    user_local = db_local.query(User).filter(User.telegram_id == message.from_user.id).first()
+    if user_local:
+        await save_prediction_log(user_local.id, f"{team1} - {team2}", winner, confidence, result_text, additional)
+    db_local.close()
+    
+    # Уменьшаем лимит и обновляем last_activity
     db = SessionLocal()
     user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
     if user and user.attempts_left > 0:
         user.attempts_left -= 1
+        user.last_activity = datetime.utcnow()
         db.commit()
     db.close()
 
-# ---------- Обработчики бота (упрощённо) ----------
+# ---------- Обработчики бота ----------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -387,7 +409,8 @@ async def process_bet_id(message: types.Message, state: FSMContext):
         username=message.from_user.username,
         full_name=message.from_user.full_name,
         attempts_left=0,
-        is_active=False
+        is_active=False,
+        last_activity=datetime.utcnow()
     )
     db.add(new_user)
     db.commit()
@@ -489,10 +512,100 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Шаблоны должны лежать в папке templates (статически)
 templates = Jinja2Templates(directory="templates")
 
-# ---------- Эндпоинты админ-панели (основные, без изменений) ----------
+# ---------- Middleware для аутентификации сотрудников ----------
+async def get_current_staff(request: Request, db: Session = Depends(get_db)):
+    session_token = request.cookies.get("staff_session")
+    if not session_token:
+        return None
+    staff = db.query(Staff).filter(Staff.session_token == session_token, Staff.is_active == True).first()
+    return staff
+
+# ---------- Страница логина ----------
+@app.get("/admin/login", response_class=HTMLResponse)
+async def staff_login_page():
+    return templates.TemplateResponse("admin_login.html", {"request": {}})
+
+@app.post("/admin/login")
+async def staff_login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    staff = db.query(Staff).filter(Staff.username == username, Staff.is_active == True).first()
+    if not staff or not pwd_context.verify(password, staff.password_hash):
+        return HTMLResponse("<h3>Invalid credentials</h3><a href='/admin/login'>Try again</a>", status_code=401)
+    import uuid
+    session_token = str(uuid.uuid4())
+    staff.session_token = session_token
+    staff.last_login = datetime.utcnow()
+    db.commit()
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    response.set_cookie(key="staff_session", value=session_token, httponly=True, max_age=86400*7)
+    return response
+
+@app.get("/admin/logout")
+async def staff_logout(request: Request, db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if staff:
+        staff.session_token = None
+        db.commit()
+    response = RedirectResponse(url="/admin/login")
+    response.delete_cookie("staff_session")
+    return response
+
+# ---------- Эндпоинт для обновления last_activity ----------
+@app.post("/update_activity")
+async def update_activity(user_id: str = Form(...)):
+    db = SessionLocal()
+    user = db.query(User).filter(User.bet_id == user_id).first()
+    if user:
+        user.last_activity = datetime.utcnow()
+        db.commit()
+    db.close()
+    return {"status": "ok"}
+
+# ---------- Экспорт в Excel ----------
+@app.get("/export_users_excel")
+async def export_users_excel(request: Request, search: str = Query(None), status: str = Query(None),
+                             limit_min: int = Query(None), limit_max: int = Query(None), date_filter: str = Query(None)):
+    if request.cookies.get("admin_auth") != "true":
+        return RedirectResponse(url="/")
+    db = SessionLocal()
+    query = db.query(User)
+    if search:
+        query = query.filter((User.telegram_id.contains(search)) | (User.bet_id.contains(search)) | (User.username.contains(search)))
+    if status == "active":
+        query = query.filter(User.is_active == True, User.is_banned == False)
+    elif status == "banned":
+        query = query.filter(User.is_banned == True)
+    elif status == "premium":
+        query = query.filter(User.is_premium == True)
+    if limit_min is not None:
+        query = query.filter(User.attempts_left >= limit_min)
+    if limit_max is not None:
+        query = query.filter(User.attempts_left <= limit_max)
+    now = datetime.utcnow()
+    if date_filter == "today":
+        start_date = now.replace(hour=0, minute=0, second=0)
+        query = query.filter(User.created_at >= start_date)
+    elif date_filter == "week":
+        start_date = now - timedelta(days=7)
+        query = query.filter(User.created_at >= start_date)
+    elif date_filter == "month":
+        start_date = now - timedelta(days=30)
+        query = query.filter(User.created_at >= start_date)
+    users = query.order_by(User.created_at.desc()).all()
+    db.close()
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["ID", "Telegram ID", "1xBet ID", "Username", "Лимит", "Активен", "Забанен", "Premium", "Дата регистрации", "Последняя активность"])
+    for u in users:
+        ws.append([u.id, u.telegram_id or "", u.bet_id, u.username or "", u.attempts_left, u.is_active, u.is_banned, u.is_premium, u.created_at, u.last_activity])
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": "attachment; filename=users.xlsx"})
+
+# ---------- Эндпоинты админ-панели (без изменений) ----------
 @app.get("/", response_class=HTMLResponse)
 async def admin_login_page():
     return templates.TemplateResponse("admin.html", {"request": {}})
@@ -729,7 +842,7 @@ async def export_users_csv(request: Request, search: str = Query(None), status: 
     response.headers["Content-Disposition"] = "attachment; filename=users_export.csv"
     return response
 
-# ---------- SSE (только одна реализация) ----------
+# ---------- SSE ----------
 def get_current_pending_count() -> int:
     db = SessionLocal()
     count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
@@ -740,10 +853,8 @@ def get_current_pending_count() -> int:
 async def stream_leads(request: Request):
     if request.cookies.get("admin_auth") != "true":
         return {"error": "Unauthorized"}
-    
     async def event_generator():
         queue = await notifier.connect()
-        # Отправляем текущее состояние
         yield {"data": json.dumps({"count": get_current_pending_count()}), "event": "update"}
         try:
             while True:
@@ -753,7 +864,6 @@ async def stream_leads(request: Request):
             pass
         finally:
             notifier.remove(queue)
-    
     return EventSourceResponse(
         event_generator(),
         ping=20,
@@ -764,7 +874,7 @@ async def stream_leads(request: Request):
         }
     )
 
-# ---------- Эндпоинт регистрации (единственный) ----------
+# ---------- Эндпоинт регистрации ----------
 @app.get("/register_request")
 async def register_request(bet_id: str, init_data: str = Query(None)):
     db = SessionLocal()
@@ -780,7 +890,6 @@ async def register_request(bet_id: str, init_data: str = Query(None)):
             except Exception as e:
                 print(f"[ERROR] Invalid init_data: {e}")
                 return {"status": "error", "message": "Invalid Telegram data"}
-        
         existing_user = db.query(User).filter(User.bet_id == bet_id).first()
         if existing_user:
             if existing_user.telegram_id is None and telegram_id is not None:
@@ -788,7 +897,6 @@ async def register_request(bet_id: str, init_data: str = Query(None)):
                 db.commit()
                 print(f"[DEBUG] Updated telegram_id for existing user bet_id={bet_id} -> {telegram_id}")
             return {"status": "ok", "already_exists": True}
-        
         new_user = User(
             telegram_id=telegram_id,
             bet_id=bet_id,
@@ -799,12 +907,9 @@ async def register_request(bet_id: str, init_data: str = Query(None)):
         db.add(new_user)
         db.commit()
         print(f"[DEBUG] Created new user: bet_id={bet_id}, telegram_id={telegram_id}")
-        
-        # Отправляем уведомление всем подключённым админам
         pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
         await notifier.push({"count": pending_count})
         print(f"[DEBUG] Sent notification to {len(notifier.connections)} connections with count={pending_count}")
-        
         return {"status": "ok", "created": True}
     except Exception as e:
         print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
@@ -813,7 +918,7 @@ async def register_request(bet_id: str, init_data: str = Query(None)):
     finally:
         db.close()
 
-# ---------- Эндпоинты для WebApp (Mini App) ----------
+# ---------- Эндпоинты для WebApp ----------
 class MatchInfo(BaseModel):
     team1: str
     team2: str
@@ -833,7 +938,6 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         return {"error": "No attempts left. Contact manager to refill."}
 
     team1 = team2 = None
-
     if photo:
         try:
             photo_bytes = await photo.read()
@@ -883,18 +987,17 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
     winner = pred["winner"]
     confidence = pred["confidence"]
     analysis_text = await generate_prediction_text(team1, team2, stats1, stats2, winner, confidence)
-
     winner_name = team1 if winner == "team1" else (team2 if winner == "team2" else "Ничья")
     total_over = random.randint(55, 75)
     corners_over = random.randint(55, 75)
     additional = f"Тотал голов (2.5): OVER ({total_over}%)\nТотал угловых (9.5): OVER ({corners_over}%)"
 
     user.attempts_left -= 1
+    user.last_activity = datetime.utcnow()
     db.commit()
     full_text = f"Победитель: {winner_name}\nУверенность: {confidence}%\n{analysis_text}"
-    await save_prediction_log(user.telegram_id, f"{team1} - {team2}", winner, confidence, full_text, additional)
+    await save_prediction_log(user.id, f"{team1} - {team2}", winner, confidence, full_text, additional)
     db.close()
-
     return {
         "prediction": {"winner": winner_name, "confidence": confidence},
         "additional": additional,
@@ -931,7 +1034,7 @@ async def webapp_news():
             return {"news": news_cache["data"]}
         return {"news": []}
 
-# ---------- Эндпоинты для фронтенда (статус, регистрация, история) ----------
+# ---------- Эндпоинты для фронтенда ----------
 @app.get("/user_status")
 async def user_status(bet_id: str):
     db = SessionLocal()
