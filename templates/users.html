@@ -9,8 +9,47 @@
         <div class="col-md-3"><div class="card text-white bg-warning"><div class="card-body"><h5 class="card-title">Премиум</h5><p class="card-text display-6">{{ premium_users }}</p></div></div></div>
         <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h5 class="card-title">Прогнозов за 24ч</h5><p class="card-text display-6">{{ predictions_today }}</p></div></div></div>
     </div>
-    <div class="card mb-4">
-        <div class="card-header">🔍 Расширенный фильтр</div>
+    
+    <!-- Аналитика (Этап 2) -->
+    <div class="row mb-4">
+        <!-- График активности -->
+        <div class="col-md-8">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-header bg-white font-weight-bold">📈 Активность за 7 дней</div>
+                <div class="card-body">
+                    <canvas id="activityChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+        <!-- Воронка и Мертвые души -->
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-header bg-white font-weight-bold">🎯 Конверсия и Удержание</div>
+                <div class="card-body">
+                    <div class="alert alert-danger mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>👻 Мертвые души:</strong> 
+                            <div class="small">Не заходили более 3 дней</div>
+                        </div>
+                        <span id="deadSoulsCount" class="fs-4 fw-bold text-danger">0</span>
+                    </div>
+                    
+                    <h6 class="text-muted">Воронка пользователей:</h6>
+                    <div class="mb-1 small d-flex justify-content-between"><span>Регистрации</span> <strong id="funnelReg">0</strong></div>
+                    <div class="progress mb-2" style="height: 10px;"><div id="barReg" class="progress-bar bg-primary" style="width: 100%"></div></div>
+                    
+                    <div class="mb-1 small d-flex justify-content-between"><span>Активированы</span> <strong id="funnelAct">0</strong></div>
+                    <div class="progress mb-2" style="height: 10px;"><div id="barAct" class="progress-bar bg-success" style="width: 0%"></div></div>
+                    
+                    <div class="mb-1 small d-flex justify-content-between"><span>Сделали прогноз</span> <strong id="funnelPred">0</strong></div>
+                    <div class="progress mb-2" style="height: 10px;"><div id="barPred" class="progress-bar bg-warning text-dark" style="width: 0%"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4 shadow-sm border-0">
+        <div class="card-header bg-white">🔍 Расширенный фильтр</div>
         <div class="card-body">
             <form method="get" id="filterForm">
                 <div class="row">
@@ -116,5 +155,75 @@
         if (window.EventSource) connectSSE();
         else console.error('[SSE] EventSource not supported');
     })();
+</script>
+
+<!-- Подключаем библиотеку для графиков -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Загрузка и отрисовка аналитики
+    async function loadAnalytics() {
+        try {
+            const res = await fetch('/api/analytics');
+            if (!res.ok) return;
+            const data = await res.json();
+            
+            // Заполняем "Мертвые души"
+            document.getElementById('deadSoulsCount').innerText = data.dead_souls;
+            
+            // Заполняем Воронку (считаем проценты)
+            const reg = data.funnel.registered;
+            const act = data.funnel.activated;
+            const pred = data.funnel.predicted;
+            
+            document.getElementById('funnelReg').innerText = reg;
+            document.getElementById('funnelAct').innerText = `${act} (${reg > 0 ? Math.round(act/reg*100) : 0}%)`;
+            document.getElementById('funnelPred').innerText = `${pred} (${reg > 0 ? Math.round(pred/reg*100) : 0}%)`;
+            
+            if (reg > 0) {
+                document.getElementById('barAct').style.width = `${(act/reg)*100}%`;
+                document.getElementById('barPred').style.width = `${(pred/reg)*100}%`;
+            }
+
+            // Рисуем график
+            const ctx = document.getElementById('activityChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.chart.dates,
+                    datasets: [
+                        {
+                            label: 'Регистрации',
+                            data: data.chart.registrations,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: 'Прогнозы',
+                            data: data.chart.predictions,
+                            borderColor: '#0dcaf0',
+                            backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        } catch(e) {
+            console.error("Ошибка загрузки аналитики:", e);
+        }
+    }
+    
+    // Вызываем функцию при загрузке страницы
+    document.addEventListener('DOMContentLoaded', loadAnalytics);
 </script>
 {% endblock %}
