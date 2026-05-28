@@ -152,6 +152,19 @@ class StaffLog(Base):
 
 Base.metadata.create_all(bind=engine)
 
+# --- АВТО-МИГРАЦИЯ ДЛЯ POSTGRESQL (Этап 3) ---
+# Добавляем новые колонки в существующую таблицу без потери данных
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_address VARCHAR;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS os_device VARCHAR;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS browser VARCHAR;"))
+        print("✅ Миграция базы данных успешно выполнена (колонки проверены/добавлены)!")
+except Exception as e:
+    print(f"⚠️ Миграция пропущена: {e}")
+# ---------------------------------------------
+
 # Создаём администратора по умолчанию, если нет ни одного сотрудника
 with SessionLocal() as db:
     if not db.query(Staff).first():
