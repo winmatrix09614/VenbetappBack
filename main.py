@@ -27,6 +27,7 @@ if not all([BOT_TOKEN, GEMINI_API_KEY, API_FOOTBALL_KEY]):
 # ---- Google Gemini SDK ----
 from google import genai
 import feedparser
+import aiohttp  # для API-Football
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -45,13 +46,31 @@ from pydantic import BaseModel
 from google.genai import types as genai_types
 import uvicorn
 
-# ---------- SSE для мгновенных уведомлений ----------
+# ---------- SSE ----------
 from sse_starlette.sse import EventSourceResponse
 
-# ---------- Очередь для уведомлений о новых лидах ----------
-notification_queue = asyncio.Queue()
+# ---------- Менеджер SSE-подписок (broadcast) ----------
+class Notifier:
+    def __init__(self):
+        self.connections: list[asyncio.Queue] = []
 
-# ---------- Валидация Telegram WebApp данных ----------
+    async def push(self, msg: dict):
+        # Отправляем сообщение всем подключённым клиентам
+        for q in self.connections:
+            await q.put(msg)
+
+    async def connect(self) -> asyncio.Queue:
+        q = asyncio.Queue()
+        self.connections.append(q)
+        return q
+
+    def remove(self, q: asyncio.Queue):
+        if q in self.connections:
+            self.connections.remove(q)
+
+notifier = Notifier()
+
+# ---------- Валидация Telegram WebApp ----------
 def validate_telegram_data(init_data: str, bot_token: str) -> dict:
     try:
         parsed = dict(parse_qsl(init_data))
@@ -336,7 +355,7 @@ async def generate_and_send_prediction(message: types.Message, team1: str, team2
         db.commit()
     db.close()
 
-# ---------- Обработчики бота (сокращённо, основные) ----------
+# ---------- Обработчики бота (основные, без изменений) ----------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -474,6 +493,99 @@ app.add_middleware(
 
 templates = Jinja2Templates(directory="templates")
 os.makedirs("templates", exist_ok=True)
+
+# Шаблоны админки (уже есть, здесь не копирую)
+# ... (они остаются без изменений, предполагается, что они есть в репозитории)
+
+# ---------- Эндпоинты админ-панели (без изменений) ----------
+# ... (здесь идут /, /login, /dashboard, /logs, /approve, /ban, /premium, /logout, массовые операции)
+# Для краткости они не повторяются, но они должны остаться в вашем файле. 
+# В релизном коде они есть. Я оставляю их как есть, не переписываю.
+
+# ---------- SSE для мгновенных уведомлений (broadcast) ----------
+def get_current_pending_count() -> int:
+    db = SessionLocal()
+    count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
+    db.close()
+    return count
+
+@app.get("/api/stream_leads")
+async def stream_leads(request: Request):
+    if request.cookies.get("admin_auth") != "true":
+        return {"error": "Unauthorized"}
+    
+    async def event_generator():
+        # Создаём очередь для этого клиента
+        queue = await notifier.connect()
+        # Отправляем текущее состояние
+        yield {"data": json.dumps({"count": get_current_pending_count()}), "event": "update"}
+        try:
+            while True:
+                data = await queue.get()
+                yield {"data": json.dumps(data), "event": "update"}
+        except asyncio.CancelledError:
+            pass
+        finally:
+            notifier.remove(queue)
+    
+    return EventSourceResponse(
+        event_generator(),
+        ping=20,   # каждые 20 секунд отправляем пинг, чтобы соединение не разрывалось
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # отключаем буферизацию на Railway/Nginx
+        }
+    )
+
+# ---------- Эндпоинт регистрации (с отправкой уведомления) ----------
+@app.get("/register_request")
+async def register_request(bet_id: str, init_data: str = Query(None)):
+    db = SessionLocal()
+    try:
+        print(f"[DEBUG] register_request: bet_id={bet_id}, init_data={'provided' if init_data else 'not provided'}")
+        telegram_id = None
+        if init_data:
+            try:
+                validated = validate_telegram_data(init_data, BOT_TOKEN)
+                user_data = json.loads(validated.get('user', '{}'))
+                telegram_id = user_data.get('id')
+                print(f"[DEBUG] Validated telegram_id={telegram_id}")
+            except Exception as e:
+                print(f"[ERROR] Invalid init_data: {e}")
+                return {"status": "error", "message": "Invalid Telegram data"}
+        
+        existing_user = db.query(User).filter(User.bet_id == bet_id).first()
+        if existing_user:
+            if existing_user.telegram_id is None and telegram_id is not None:
+                existing_user.telegram_id = telegram_id
+                db.commit()
+                print(f"[DEBUG] Updated telegram_id for existing user bet_id={bet_id} -> {telegram_id}")
+            return {"status": "ok", "already_exists": True}
+        
+        new_user = User(
+            telegram_id=telegram_id,
+            bet_id=bet_id,
+            attempts_left=0,
+            is_active=False,
+            is_banned=False
+        )
+        db.add(new_user)
+        db.commit()
+        print(f"[DEBUG] Created new user: bet_id={bet_id}, telegram_id={telegram_id}")
+        
+        # Уведомляем всех подключённых админов
+        pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
+        await notifier.push({"count": pending_count})
+        print(f"[DEBUG] Sent notification to {len(notifier.connections)} connections with count={pending_count}")
+        
+        return {"status": "ok", "created": True}
+    except Exception as e:
+        print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
 
 # Шаблоны админки (создаются автоматически)
 with open("templates/admin_base.html", "w", encoding="utf-8") as f:

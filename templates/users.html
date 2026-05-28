@@ -49,13 +49,13 @@
     document.querySelectorAll('.give-attempts').forEach(btn=>{btn.addEventListener('click',function(){let userId=this.dataset.id,attempts=this.dataset.attempts;fetch('/give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,attempts:parseInt(attempts)})}).then(()=>location.reload());});});
     document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
-    // ------------- Мгновенные уведомления о новых лидах -------------
+    
+    // ---------- Мгновенные уведомления через SSE ----------
     (function() {
         let lastCount = Number({{ pending_count | default(0) }});
         let eventSource = null;
 
         function showNotification(message) {
-            // Неблокирующий тост (можно заменить на alert, но тост красивее)
             const toastContainer = document.getElementById('toast-container') || (() => {
                 const container = document.createElement('div');
                 container.id = 'toast-container';
@@ -90,7 +90,8 @@
             if (eventSource) {
                 eventSource.close();
             }
-            eventSource = new EventSource('/api/stream_leads');
+            // Добавляем случайный параметр, чтобы избежать кэширования
+            eventSource = new EventSource('/api/stream_leads?t=' + new Date().getTime());
             
             eventSource.addEventListener('update', function(event) {
                 try {
@@ -114,7 +115,6 @@
             };
         }
 
-        // Запускаем SSE соединение
         connectSSE();
     })();
 </script>
