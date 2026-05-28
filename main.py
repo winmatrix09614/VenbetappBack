@@ -48,17 +48,19 @@ import uvicorn
 
 # ---------- Gemini ----------
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-1.5-pro"  # используйте 1.5-pro или 1.5-flash
 
 # ---------- Кэш для статистики команд ----------
 team_stats_cache = OrderedDict()
 CACHE_TTL = 3600
 
 # ---------- База данных ----------
-DATABASE_URL = "sqlite:///./bot_database.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bot_database.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
@@ -812,18 +814,24 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
     if user.attempts_left <= 0:
         db.close()
         return {"error": "No attempts left. Contact manager to refill."}
-    
+
     team1 = team2 = None
-    
+
     if photo:
         import shutil
+        print(f"[DEBUG] Received photo: {photo.filename}, content_type: {photo.content_type}")
         temp_path = f"temp_{photo.filename}"
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(photo.file, buffer)
+        file_size = os.path.getsize(temp_path)
+        print(f"[DEBUG] File saved, size: {file_size} bytes")
+
         try:
             uploaded = client.files.upload(file=temp_path)
+            print(f"[DEBUG] File uploaded to Gemini: {uploaded.name}")
             prompt = "Extract team names from this screenshot. Return JSON: {\"team1\": \"...\", \"team2\": \"...\"}"
             response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
+            print(f"[DEBUG] Gemini response: {response.text}")
             os.remove(temp_path)
             text_resp = response.text.strip()
             json_match = re.search(r'\{.*\}', text_resp, re.DOTALL)
@@ -831,11 +839,13 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
                 data = json.loads(json_match.group())
                 team1 = data.get("team1", "").strip()
                 team2 = data.get("team2", "").strip()
+                print(f"[DEBUG] Extracted: team1='{team1}', team2='{team2}'")
             else:
+                print("[DEBUG] No JSON found in Gemini response")
                 db.close()
                 return {"error": "Could not recognize teams from screenshot."}
         except Exception as e:
-            print(f"Error processing photo: {e}")
+            print(f"[ERROR] Photo processing exception: {type(e).__name__}: {e}")
             db.close()
             return {"error": "Error processing photo."}
     elif text:
@@ -849,38 +859,39 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
     else:
         db.close()
         return {"error": "No input."}
-    
+
     if not team1 or not team2 or team1 == "Unknown" or team2 == "Unknown":
         db.close()
         return {"error": "Could not determine team names."}
-    
+
+    # -------- ПОЛУЧАЕМ СТАТИСТИКУ И ПРОГНОЗ --------
     stats1 = await get_team_stats(team1)
     stats2 = await get_team_stats(team2)
     pred = calculate_prediction(stats1, stats2)
     winner = pred["winner"]
     confidence = pred["confidence"]
     analysis_text = await generate_prediction_text(team1, team2, stats1, stats2, winner, confidence)
-    
+
     winner_name = team1 if winner == "team1" else (team2 if winner == "team2" else "Ничья")
     total_over = random.randint(55, 75)
     corners_over = random.randint(55, 75)
     additional = f"Тотал голов (2.5): OVER ({total_over}%)\nТотал угловых (9.5): OVER ({corners_over}%)"
-    
+
     user.attempts_left -= 1
     db.commit()
     full_text = f"Победитель: {winner_name}\nУверенность: {confidence}%\n{analysis_text}"
     await save_prediction_log(user.telegram_id, f"{team1} - {team2}", winner, confidence, full_text, additional)
     db.close()
-    
+
     return {
         "prediction": {"winner": winner_name, "confidence": confidence},
         "additional": additional,
         "prediction_text": analysis_text
     }
 
-# Кэш для новостей (поместите в начало файла, где объявляются другие кэши)
+# ---------- Кэш для новостей ----------
 news_cache = {"data": [], "last_update": 0}
-CACHE_TTL = 1800  # 30 минут
+NEWS_CACHE_TTL = 1800  # 30 минут
 
 @app.get("/webapp/news")
 async def webapp_news():
