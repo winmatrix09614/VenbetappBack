@@ -54,6 +54,10 @@ MODEL_NAME = "gemini-1.5-pro"  # используйте 1.5-pro или 1.5-flash
 team_stats_cache = OrderedDict()
 CACHE_TTL = 3600
 
+# ---------- Кэш для новостей ----------
+news_cache = {"data": [], "last_update": 0}
+NEWS_CACHE_TTL = 1800  # 30 минут
+
 # ---------- База данных ----------
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bot_database.db")
 if DATABASE_URL.startswith("postgres://"):
@@ -62,6 +66,7 @@ if DATABASE_URL.startswith("postgres://"):
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -889,14 +894,10 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         "prediction_text": analysis_text
     }
 
-# ---------- Кэш для новостей ----------
-news_cache = {"data": [], "last_update": 0}
-NEWS_CACHE_TTL = 1800  # 30 минут
-
 @app.get("/webapp/news")
 async def webapp_news():
     current_time = time.time()
-    if current_time - news_cache["last_update"] < CACHE_TTL and news_cache["data"]:
+    if current_time - news_cache["last_update"] < NEWS_CACHE_TTL and news_cache["data"]:
         return {"news": news_cache["data"]}
 
     try:
