@@ -207,19 +207,16 @@ class StaffLog(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# ----- ВРЕМЕННО: создание первого администратора, если таблица staff пуста -----
 with SessionLocal() as db:
-    if not db.query(Staff).first():
-        admin = Staff(
-            username="admin",
-            password_hash=pwd_context.hash("admin2025"),
-            role="admin",
-            is_active=True
-        )
+    admin = db.query(Staff).filter(Staff.username == "admin").first()
+    if not admin:
+        admin = Staff(username="admin", role="admin", is_active=True)
         db.add(admin)
-        db.commit()
-        print("✅ Создан администратор: admin / ваш_пароль")
-
+    # Обновляем хеш пароля на актуальный (даже если админ уже был)
+    admin.password_hash = pwd_context.hash("admin2025")
+    db.commit()
+    print("✅ Администратор admin обновлён (пароль admin2025)")
+    
 def get_db():
     db = SessionLocal()
     try:
