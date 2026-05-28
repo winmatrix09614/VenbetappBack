@@ -3,6 +3,7 @@
 {% block content %}
 <div class="container-fluid px-0">
     <h2 class="mb-4">👥 Управление пользователями</h2>
+    
     <div class="row mb-4">
         <div class="col-md-3"><div class="card text-white bg-primary"><div class="card-body"><h5 class="card-title">Всего пользователей</h5><p class="card-text display-6">{{ total_users }}</p></div></div></div>
         <div class="col-md-3"><div class="card text-white bg-success"><div class="card-body"><h5 class="card-title">Активные</h5><p class="card-text display-6">{{ active_users }}</p></div></div></div>
@@ -71,42 +72,157 @@
                     <div class="col-md-3"><label>Дата регистрации</label><select name="date_filter" class="form-select"><option value="">Любая</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
                 </div>
                 <div class="row mt-3">
-                    <div class="col-md-12"><button type="submit" class="btn btn-primary">Применить фильтр</button><a href="/dashboard" class="btn btn-secondary">Сбросить</a><button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button></div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary">Применить фильтр</button>
+                        <a href="/dashboard" class="btn btn-secondary">Сбросить</a>
+                        <button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
-    <div class="mb-3"><button type="button" id="massGiveAttempts" class="btn btn-outline-primary">➕ Выдать +5 прогнозов выбранным</button><button type="button" id="massActivate" class="btn btn-outline-success">✅ Активировать выбранных</button><button type="button" id="massBan" class="btn btn-outline-danger">🚫 Забанить выбранных</button></div>
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover" id="usersTable">
-            <thead class="table-dark"><tr><th><input type="checkbox" id="selectAll"></th><th>ID</th><th>Telegram ID</th><th>1xBet ID</th><th>Username</th><th>Лимит</th><th>Активен</th><th>Забанен</th><th>Premium</th><th>Действия</th></tr></thead>
-            <tbody>{% for u in users %}<tr><td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td><td>{{ u.id }}</td><td>{{ u.telegram_id }}</td><td>{{ u.bet_id }}</td><td>{{ u.username or '-' }}</td>
-            <td>{{ u.attempts_left }}</td><td>{{ '✅' if u.is_active else '❌' }}</td><td>{{ '🚫' if u.is_banned else '—' }}</td><td>{{ '⭐' if u.is_premium else '—' }}</td>
-            <td>
-                <div class="btn-group btn-group-sm shadow-sm">
-                    <button class="btn btn-dark btn-sm open-profile" title="Профиль и Трекер"
-                        data-id="{{ u.id }}" 
-                        data-tg="{{ u.telegram_id or '—' }}" 
-                        data-bet="{{ u.bet_id }}"
-                        data-username="{{ u.username or '—' }}" 
-                        data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
-                        data-ip="{{ u.ip_address or '—' }}" 
-                        data-country="{{ u.country or '—' }}"
-                        data-os="{{ u.os_device or '—' }}" 
-                        data-browser="{{ u.browser or '—' }}"
-                        data-source="{{ u.source or 'Органика' }}">
-                        👁️
-                    </button>
-                    <button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button><button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button><form method="post" action="/approve" style="display:inline;"><input type="hidden" name="user_id" value="{{ u.id }}">
+
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+        <div>
+            <button type="button" id="massGiveAttempts" class="btn btn-outline-primary shadow-sm">➕ Выдать +5 выбранным</button>
+            <button type="button" id="massActivate" class="btn btn-outline-success shadow-sm">✅ Активировать выбранных</button>
+            <button type="button" id="massBan" class="btn btn-outline-danger shadow-sm">🚫 Забанить выбранных</button>
+        </div>
+        <button type="button" class="btn btn-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#utmModal">🔗 Генератор UTM-ссылок</button>
     </div>
+
+    <div class="table-responsive shadow-sm rounded-3">
+        <table class="table table-bordered table-hover align-middle" id="usersTable">
+            <thead class="table-dark">
+                <tr>
+                    <th><input type="checkbox" id="selectAll"></th>
+                    <th>ID</th>
+                    <th>Telegram ID</th>
+                    <th>1xBet ID</th>
+                    <th>Username</th>
+                    <th>Источник</th>
+                    <th>Лимит</th>
+                    <th>Активен</th>
+                    <th>Забанен</th>
+                    <th>Premium</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td>
+                    <td>{{ u.id }}</td>
+                    <td>{{ u.telegram_id or '-' }}</td>
+                    <td>{{ u.bet_id }}</td>
+                    <td>{{ u.username or '-' }}</td>
+                    <td><span class="badge bg-light text-secondary border">{{ u.source or 'Органика' }}</span></td>
+                    <td><strong>{{ u.attempts_left }}</strong></td>
+                    <td>{{ '✅' if u.is_active else '❌' }}</td>
+                    <td>{{ '🚫' if u.is_banned else '—' }}</td>
+                    <td>{{ '⭐' if u.is_premium else '—' }}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm shadow-sm">
+                            <button class="btn btn-dark btn-sm open-profile" title="Профиль и Трекер"
+                                data-id="{{ u.id }}" 
+                                data-tg="{{ u.telegram_id or '—' }}" 
+                                data-bet="{{ u.bet_id }}"
+                                data-username="{{ u.username or '—' }}" 
+                                data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
+                                data-ip="{{ u.ip_address or '—' }}" 
+                                data-country="{{ u.country or '—' }}"
+                                data-os="{{ u.os_device or '—' }}" 
+                                data-browser="{{ u.browser or '—' }}"
+                                data-source="{{ u.source or 'Органика' }}">
+                                👁️
+                            </button>
+                            
+                            <button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button>
+                            <button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button>
+                            
+                            <form method="post" action="/approve" style="display:inline;">
+                                <input type="hidden" name="user_id" value="{{ u.id }}">
+                                <input type="number" name="attempts" value="50" style="width:60px; display:inline;">
+                                <button type="submit" class="btn btn-warning btn-sm">Акт.</button>
+                            </form>
+                            
+                            <form method="post" action="/ban" style="display:inline;">
+                                <input type="hidden" name="user_id" value="{{ u.id }}">
+                                <button type="submit" class="btn btn-danger btn-sm">Бан</button>
+                            </form>
+                            
+                            <form method="post" action="/premium" style="display:inline;">
+                                <input type="hidden" name="user_id" value="{{ u.id }}">
+                                <button type="submit" class="btn btn-secondary btn-sm">Premium</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
     <div class="row mt-3">
-        <div class="col-md-3"><select id="perPageSelect" class="form-select w-auto d-inline-block"><option value="20" {% if per_page == 20 %}selected{% endif %}>20</option><option value="50" {% if per_page == 50 %}selected{% endif %}>50</option><option value="100" {% if per_page == 100 %}selected{% endif %}>100</option></select><span>записей на странице</span></div>
-        <div class="col-md-9"><nav><ul class="pagination justify-content-end">...</ul></nav></div>
+        <div class="col-md-3">
+            <select id="perPageSelect" class="form-select w-auto d-inline-block">
+                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+            <span>записей на странице</span>
+        </div>
+        <div class="col-md-9">
+            <nav>
+                <ul class="pagination justify-content-end">
+                    {% if page > 1 %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>
+                    {% endif %}
+                    {% for p in range(1, total_pages+1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>
+                    {% endfor %}
+                    {% if page < total_pages %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
     </div>
 </div>
 
+<div class="modal fade" id="utmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-dark text-white border-0">
+        <h5 class="modal-title">🔗 Генератор реферальных ссылок</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <p class="text-muted small mb-3">Создайте уникальную ссылку для рекламы. Все пользователи, запустившие бота по этой ссылке, будут помечены выбранным источником.</p>
+        
+        <label class="form-label fw-bold small">Имя источника бота (Username):</label>
+        <div class="input-group mb-3">
+            <span class="input-group-text bg-light">@</span>
+            <input type="text" id="botUsername" class="form-control" placeholder="your_bot_username" value="VenbetApp_bot">
+        </div>
+
+        <label class="form-label fw-bold small">Название кампании (Source):</label>
+        <div class="input-group mb-4">
+            <span class="input-group-text bg-light">?start=</span>
+            <input type="text" id="campaignName" class="form-control" placeholder="например: tiktok_ad_1" oninput="generateLink()">
+        </div>
+
+        <div class="p-3 bg-light border rounded-3 text-center position-relative">
+            <div class="small text-muted mb-1">Готовая ссылка:</div>
+            <code id="resultLink" class="fs-6 text-primary fw-bold" style="word-break: break-all;">https://t.me/VenbetApp_bot</code>
+            <button class="btn btn-sm btn-success mt-3 w-100 fw-bold" onclick="copyLink()">📋 Скопировать ссылку</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
-    /* Стили для премиальной темной панели */
     .tracker-offcanvas { background-color: #1a1e29; color: #a0a6b5; border-left: 1px solid #2d3343; width: 450px; }
     .tracker-header { background-color: #141720; border-bottom: 1px solid #2d3343; }
     .tracker-title-section { font-size: 11px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 15px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; }
@@ -126,7 +242,6 @@
     </div>
     
     <div class="offcanvas-body" style="padding: 0 25px 25px 25px; overflow-y: auto;">
-        
         <div class="tracker-title-section">USER INFORMATION <i class="bi bi-chevron-down"></i></div>
         <div class="row">
             <div class="col-6 tracker-field"><div class="tracker-label">USERNAME</div><div class="tracker-value" id="ocUsername"></div></div>
@@ -152,13 +267,12 @@
         </div>
 
         <div class="tracker-title-section" style="border-top: 1px solid #2d3343; padding-top: 20px;">ACTIVITY LOG <i class="bi bi-chevron-down"></i></div>
-        <div id="ocHistoryList" class="mt-3">
-            </div>
-
+        <div id="ocHistoryList" class="mt-3"></div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // ---------- Массовые операции (оставить без изменений) ----------
+    // --- 1. Массовые операции и таблица ---
     document.getElementById('massGiveAttempts').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s,attempts:5})}).then(()=>location.reload());});
     document.getElementById('massActivate').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
     document.getElementById('massBan').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
@@ -167,24 +281,33 @@
     document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
 
-    // ---------- Логика Карточки Профиля (Offcanvas) ----------
+    // --- 2. Генератор ссылок ---
+    function generateLink() {
+        const bot = document.getElementById('botUsername').value.replace('@', '').trim();
+        let campaign = document.getElementById('campaignName').value.trim();
+        campaign = campaign.replace(/[^a-zA-Z0-9_-]/g, '');
+        document.getElementById('campaignName').value = campaign;
+        const link = campaign ? `https://t.me/${bot}?start=${campaign}` : `https://t.me/${bot}`;
+        document.getElementById('resultLink').innerText = link;
+    }
+    function copyLink() {
+        navigator.clipboard.writeText(document.getElementById('resultLink').innerText).then(() => alert('Ссылка скопирована!'));
+    }
+
+    // --- 3. Логика Карточки Профиля (Offcanvas) ---
     document.querySelectorAll('.open-profile').forEach(btn => {
         btn.addEventListener('click', async function() {
             const ds = this.dataset;
-            
-            // Заполняем базовые данные
             document.getElementById('ocUserId').innerText = ds.id;
             document.getElementById('ocUsername').innerText = ds.username !== '—' ? '@' + ds.username : '—';
             document.getElementById('ocTgId').innerText = ds.tg;
             document.getElementById('ocBetId').innerText = ds.bet;
             document.getElementById('ocRegDate').innerText = ds.reg;
-            
             document.getElementById('ocIp').innerText = ds.ip;
             document.getElementById('ocCountry').innerText = ds.country;
             document.getElementById('ocOs').innerText = ds.os;
             document.getElementById('ocBrowser').innerText = ds.browser;
 
-            // Логика сборных UTM-хвостов (напр: fb_cpc_egypt1)
             const rawSource = ds.source;
             document.getElementById('ocRawSource').innerText = rawSource;
             
@@ -199,243 +322,110 @@
                 document.getElementById('ocUtmCampaign').innerText = 'none';
             }
 
-            // Открываем панель
             const offcanvasElement = document.getElementById('leadProfileCanvas');
-            const bsOffcanvas = new bootstrap.Offcanvas(offcanvasElement);
-            bsOffcanvas.show();
+            new bootstrap.Offcanvas(offcanvasElement).show();
 
-            // Подгружаем историю прогнозов через API, которое у нас уже есть!
             const histContainer = document.getElementById('ocHistoryList');
-            histContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border text-info spinner-border-sm"></div> <span class="text-muted small ms-2">Загрузка логов...</span></div>';
+            histContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border text-info spinner-border-sm"></div></div>';
             
             try {
                 const res = await fetch(`/user_history?bet_id=${ds.bet}`);
                 const data = await res.json();
-                
                 if (!data.history || data.history.length === 0) {
                     histContainer.innerHTML = '<div class="text-muted small">Нет истории прогнозов</div>';
                 } else {
                     histContainer.innerHTML = data.history.map(h => `
                         <div class="tracker-history-item">
                             <div class="text-white fw-bold mb-1" style="font-size: 13px;">${h.match_description}</div>
-                            <div style="font-size: 11px; color: #a0a6b5;">
-                                AI Вердикт: <span class="${h.winner === 'draw' ? 'text-warning' : 'text-success'} fw-bold">${h.winner.toUpperCase()}</span> 
-                                <span class="ms-2">Уверенность: <span class="text-white">${h.confidence}%</span></span>
-                            </div>
+                            <div style="font-size: 11px; color: #a0a6b5;">AI Вердикт: <span class="${h.winner === 'draw' ? 'text-warning' : 'text-success'} fw-bold">${h.winner.toUpperCase()}</span> <span class="ms-2">Уверенность: <span class="text-white">${h.confidence}%</span></span></div>
                             <div class="mt-2" style="font-size: 10px; color: #64748b;">${h.created_at.replace('T', ' ').substring(0, 16)}</div>
-                        </div>
-                    `).join('');
+                        </div>`).join('');
                 }
-            } catch(e) {
-                histContainer.innerHTML = '<div class="text-danger small">Ошибка загрузки истории</div>';
-            }
+            } catch(e) { histContainer.innerHTML = '<div class="text-danger small">Ошибка загрузки</div>'; }
         });
     });
 
-    // ---------- Мгновенные уведомления через SSE ----------
+    // --- 4. Мгновенные уведомления через SSE ---
     (function() {
-        console.log('[SSE] Script starting...');
         let lastCount = Number({{ pending_count | default(0) }});
         let eventSource = null;
-
         function showNotification(message) {
             const toastContainer = document.getElementById('toast-container') || (() => {
                 const container = document.createElement('div');
                 container.id = 'toast-container';
-                container.style.position = 'fixed';
-                container.style.bottom = '20px';
-                container.style.right = '20px';
-                container.style.zIndex = '1050';
-                document.body.appendChild(container);
-                return container;
+                container.style.position = 'fixed'; container.style.bottom = '20px'; container.style.right = '20px'; container.style.zIndex = '1050';
+                document.body.appendChild(container); return container;
             })();
             const toast = document.createElement('div');
-            toast.style.backgroundColor = '#28a745';
-            toast.style.color = 'white';
-            toast.style.borderRadius = '8px';
-            toast.style.padding = '12px 20px';
-            toast.style.marginTop = '10px';
-            toast.style.cursor = 'pointer';
-            toast.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>${message}</span>
-                    <button type="button" style="background: none; border: none; color: white; font-size: 20px;" onclick="this.parentElement.parentElement.remove()">✖</button>
-                </div>
-            `;
-            toast.onclick = (e) => {
-                if (e.target.tagName !== 'BUTTON') window.location.href = '/dashboard';
-            };
-            toastContainer.appendChild(toast);
-            setTimeout(() => toast.remove(), 8000);
+            toast.style.cssText = 'background-color:#28a745;color:white;border-radius:8px;padding:12px 20px;margin-top:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+            toast.innerHTML = `<span>${message}</span><button type="button" style="background:none;border:none;color:white;font-size:20px;" onclick="this.parentElement.remove()">✖</button>`;
+            toast.onclick = (e) => { if (e.target.tagName !== 'BUTTON') window.location.href = '/dashboard'; };
+            toastContainer.appendChild(toast); setTimeout(() => toast.remove(), 8000);
         }
-
         function connectSSE() {
             if (eventSource) eventSource.close();
-            console.log('[SSE] Creating EventSource...');
             eventSource = new EventSource('/api/stream_leads?t=' + new Date().getTime());
-            eventSource.onopen = () => console.log('[SSE] Connection opened');
             eventSource.addEventListener('update', function(event) {
-                console.log('[SSE] Received update:', event.data);
                 try {
-                    const data = JSON.parse(event.data);
-                    const currentCount = Number(data.count);
+                    const data = JSON.parse(event.data); const currentCount = Number(data.count);
                     if (!isNaN(currentCount) && currentCount > lastCount) {
-                        showNotification(`📢 Новый лид! Всего ожидает: ${currentCount}`);
-                        lastCount = currentCount;
-                    } else if (!isNaN(currentCount) && currentCount < lastCount) {
-                        lastCount = currentCount;
-                    }
-                } catch(e) { console.error('[SSE] Parse error:', e); }
+                        showNotification(`📢 Новый лид! Всего ожидает: ${currentCount}`); lastCount = currentCount;
+                    } else if (!isNaN(currentCount) && currentCount < lastCount) lastCount = currentCount;
+                } catch(e) {}
             });
-            eventSource.onerror = function(e) {
-                console.error('[SSE] Connection error:', e);
-                eventSource.close();
-                setTimeout(connectSSE, 5000);
-            };
+            eventSource.onerror = function() { eventSource.close(); setTimeout(connectSSE, 5000); };
         }
-
         if (window.EventSource) connectSSE();
-        else console.error('[SSE] EventSource not supported');
     })();
-</script>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    let currentChart = null; // Переменная для хранения текущего графика
-
-    // Функция, которая срабатывает при нажатии кнопки "Показать"
+    // --- 5. Аналитика и Графики ---
+    let currentChart = null;
     function applyCustomDates() {
-        const start = document.getElementById('startDate').value;
-        const end = document.getElementById('endDate').value;
-        if (start && end) {
-            loadAnalytics(start, end);
-        } else {
-            alert('Пожалуйста, выберите обе даты');
-        }
+        const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value;
+        if (start && end) loadAnalytics(start, end); else alert('Пожалуйста, выберите обе даты');
     }
-
-    // Загрузка и отрисовка аналитики
     async function loadAnalytics(startDateStr = null, endDateStr = null) {
-        // Если даты не переданы (при первой загрузке), ставим последние 7 дней
         if (!startDateStr || !endDateStr) {
-            const end = new Date();
-            const start = new Date();
-            start.setDate(end.getDate() - 6);
-            
-            startDateStr = start.toISOString().split('T')[0];
-            endDateStr = end.toISOString().split('T')[0];
-            
-            // Вставляем эти даты в поля календариков
-            document.getElementById('startDate').value = startDateStr;
-            document.getElementById('endDate').value = endDateStr;
+            const end = new Date(); const start = new Date(); start.setDate(end.getDate() - 6);
+            startDateStr = start.toISOString().split('T')[0]; endDateStr = end.toISOString().split('T')[0];
+            document.getElementById('startDate').value = startDateStr; document.getElementById('endDate').value = endDateStr;
         }
-
         try {
-            // Запрашиваем данные у сервера с учетом выбранных дат
             const res = await fetch(`/api/analytics?start_date=${startDateStr}&end_date=${endDateStr}`);
-            if (!res.ok) return;
-            const data = await res.json();
+            if (!res.ok) return; const data = await res.json();
             
-            // Заполняем "Мертвые души"
             document.getElementById('deadSoulsCount').innerText = data.dead_souls;
-            
-            // Заполняем Воронку (Высчитываем проценты)
-            const reg = data.funnel.registered;
-            const act = data.funnel.activated;
-            const pred = data.funnel.predicted;
+            const reg = data.funnel.registered; const act = data.funnel.activated; const pred = data.funnel.predicted;
             
             document.getElementById('funnelReg').innerText = reg;
             document.getElementById('funnelAct').innerText = `${act} (${reg > 0 ? Math.round(act/reg*100) : 0}%)`;
             document.getElementById('funnelPred').innerText = `${pred} (${reg > 0 ? Math.round(pred/reg*100) : 0}%)`;
-            
-            if (reg > 0) {
-                document.getElementById('barAct').style.width = `${(act/reg)*100}%`;
-                document.getElementById('barPred').style.width = `${(pred/reg)*100}%`;
-            } else {
-                document.getElementById('barAct').style.width = `0%`;
-                document.getElementById('barPred').style.width = `0%`;
-            }
+            document.getElementById('barAct').style.width = reg > 0 ? `${(act/reg)*100}%` : `0%`;
+            document.getElementById('barPred').style.width = reg > 0 ? `${(pred/reg)*100}%` : `0%`;
 
-            // --- ОТРИСОВКА PREMIUM ГРАФИКА ---
             const ctx = document.getElementById('activityChart').getContext('2d');
-            
-            if (currentChart) {
-                currentChart.destroy(); // Уничтожаем старый график перед отрисовкой нового
-            }
-
-            // Создаем градиенты для заливки под линией
-            const gradientBlue = ctx.createLinearGradient(0, 0, 0, 300);
-            gradientBlue.addColorStop(0, 'rgba(13, 110, 253, 0.4)');
-            gradientBlue.addColorStop(1, 'rgba(13, 110, 253, 0.0)');
-
-            const gradientTeal = ctx.createLinearGradient(0, 0, 0, 300);
-            gradientTeal.addColorStop(0, 'rgba(13, 202, 240, 0.4)');
-            gradientTeal.addColorStop(1, 'rgba(13, 202, 240, 0.0)');
-
-            // Форматируем даты для красоты (из "2026-05-29" в "29 Мая")
-            const formattedDates = data.chart.dates.map(dateStr => {
-                const d = new Date(dateStr);
-                return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-            });
+            if (currentChart) currentChart.destroy();
+            const gradientBlue = ctx.createLinearGradient(0, 0, 0, 300); gradientBlue.addColorStop(0, 'rgba(13, 110, 253, 0.4)'); gradientBlue.addColorStop(1, 'rgba(13, 110, 253, 0.0)');
+            const gradientTeal = ctx.createLinearGradient(0, 0, 0, 300); gradientTeal.addColorStop(0, 'rgba(13, 202, 240, 0.4)'); gradientTeal.addColorStop(1, 'rgba(13, 202, 240, 0.0)');
+            const formattedDates = data.chart.dates.map(dateStr => new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }));
 
             currentChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: formattedDates,
                     datasets: [
-                        {
-                            label: 'Регистрации',
-                            data: data.chart.registrations,
-                            borderColor: '#0d6efd',
-                            backgroundColor: gradientBlue,
-                            borderWidth: 3,           
-                            tension: 0.4,             // Плавные изгибы
-                            pointRadius: 0,           // Скрываем точки
-                            pointHoverRadius: 6,      // Показываем точку только при наведении мыши
-                            pointBackgroundColor: '#fff',
-                            pointBorderColor: '#0d6efd',
-                            pointBorderWidth: 2,
-                            fill: true
-                        },
-                        {
-                            label: 'Прогнозы',
-                            data: data.chart.predictions,
-                            borderColor: '#0dcaf0',
-                            backgroundColor: gradientTeal,
-                            borderWidth: 3,
-                            tension: 0.4,
-                            pointRadius: 0,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#fff',
-                            pointBorderColor: '#0dcaf0',
-                            pointBorderWidth: 2,
-                            fill: true
-                        }
+                        { label: 'Регистрации', data: data.chart.registrations, borderColor: '#0d6efd', backgroundColor: gradientBlue, borderWidth: 3, tension: 0.4, pointRadius: 0, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: '#0d6efd', pointBorderWidth: 2, fill: true },
+                        { label: 'Прогнозы', data: data.chart.predictions, borderColor: '#0dcaf0', backgroundColor: gradientTeal, borderWidth: 3, tension: 0.4, pointRadius: 0, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: '#0dcaf0', pointBorderWidth: 2, fill: true }
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false, 
-                    },
-                    plugins: { 
-                        legend: { position: 'top', align: 'end', labels: { boxWidth: 12, usePointStyle: true } },
-                        tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', padding: 12, cornerRadius: 8 }
-                    },
-                    scales: { 
-                        x: { grid: { display: false } }, // Убираем вертикальную сетку
-                        y: { beginAtZero: true, ticks: { precision: 0, padding: 10 }, border: { display: false }, grid: { color: '#f0f0f0', drawTicks: false } }
-                    }
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 12, usePointStyle: true } }, tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', padding: 12, cornerRadius: 8 } },
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0, padding: 10 }, border: { display: false }, grid: { color: '#f0f0f0', drawTicks: false } } }
                 }
             });
-        } catch(e) {
-            console.error("Ошибка загрузки аналитики:", e);
-        }
+        } catch(e) {}
     }
-    
-    // Вызываем функцию при первой загрузке страницы
     document.addEventListener('DOMContentLoaded', () => loadAnalytics());
 </script>
 {% endblock %}
