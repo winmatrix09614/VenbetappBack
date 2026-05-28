@@ -106,7 +106,13 @@ class User(Base):
     confirmed_at = Column(DateTime, nullable=True)
     is_premium = Column(Boolean, default=False)
     last_activity = Column(DateTime, nullable=True)
-    source = Column(String, nullable=True)  # для трекинга трафика
+    source = Column(String, nullable=True)  # сырой хвост (например fb_cpc_promo)
+    
+    # --- Поля для трекера (Этап 3) ---
+    ip_address = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    os_device = Column(String, nullable=True)
+    browser = Column(String, nullable=True)
 
 class PredictionLog(Base):
     __tablename__ = "prediction_logs"
@@ -1121,28 +1127,59 @@ async def get_analytics(
 
 # ---------- Эндпоинт регистрации ----------
 @app.get("/register_request")
-async def register_request(bet_id: str, init_data: str = Query(None), source: str = Query(None), db: Session = Depends(get_db)):
+async def register_request(
+    request: Request, # <-- Добавили Request для получения IP и заголовков
+    bet_id: str, 
+    init_data: str = Query(None), 
+    source: str = Query(None), 
+    db: Session = Depends(get_db)
+):
     try:
+        # Вытаскиваем IP и User-Agent (Устройство)
+        ip_address = request.client.host
+        # Если бэкенд за Cloudflare или Railway Proxy, реальный IP лежит в заголовке X-Forwarded-For
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            ip_address = forwarded_for.split(",")[0]
+            
+        user_agent = request.headers.get("User-Agent", "Unknown")
+        
+        # Простейший парсинг устройства
+        os_device = "Unknown"
+        if "iPhone" in user_agent or "iPad" in user_agent: os_device = "iOS"
+        elif "Android" in user_agent: os_device = "Android"
+        elif "Windows" in user_agent: os_device = "Windows"
+        elif "Mac OS" in user_agent: os_device = "macOS"
+
         telegram_id = None
         if init_data:
             validated = validate_telegram_data(init_data, BOT_TOKEN)
             user_data = json.loads(validated.get('user', '{}'))
             telegram_id = user_data.get('id')
+            
         existing_user = db.query(User).filter(User.bet_id == bet_id).first()
         if existing_user:
             if existing_user.telegram_id is None and telegram_id is not None:
                 existing_user.telegram_id = telegram_id
             if source and not existing_user.source:
                 existing_user.source = source
+            # Обновляем IP при повторном входе
+            existing_user.ip_address = ip_address
+            existing_user.os_device = os_device
+            existing_user.browser = user_agent[:200] # Сохраняем часть юзер-агента
             db.commit()
             return {"status": "ok", "already_exists": True}
+            
         new_user = User(
             telegram_id=telegram_id,
             bet_id=bet_id,
             attempts_left=0,
             is_active=False,
             is_banned=False,
-            source=source
+            source=source,
+            ip_address=ip_address,
+            os_device=os_device,
+            browser=user_agent[:200] # Ограничиваем длину
         )
         db.add(new_user)
         db.commit()
