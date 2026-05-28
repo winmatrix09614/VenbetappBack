@@ -44,11 +44,17 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
+from pydantic import BaseModel
+from google.genai import types
+
+class MatchInfo(BaseModel):
+    team1: str
+    team2: str
 import uvicorn
 
 # ---------- Gemini ----------
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-1.5-flash"  # используйте 1.5-pro или 1.5-flash
+MODEL_NAME = "gemini-2.5-flash"  
 
 # ---------- Кэш для статистики команд ----------
 team_stats_cache = OrderedDict()
@@ -823,34 +829,34 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
     team1 = team2 = None
 
     if photo:
-        import shutil
-        print(f"[DEBUG] Received photo: {photo.filename}, content_type: {photo.content_type}")
-        temp_path = f"temp_{photo.filename}"
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(photo.file, buffer)
-        file_size = os.path.getsize(temp_path)
-        print(f"[DEBUG] File saved, size: {file_size} bytes")
-
         try:
-            uploaded = client.files.upload(file=temp_path)
-            print(f"[DEBUG] File uploaded to Gemini: {uploaded.name}")
-            prompt = "Extract team names from this screenshot. Return JSON: {\"team1\": \"...\", \"team2\": \"...\"}"
-            response = client.models.generate_content(model=MODEL_NAME, contents=[prompt, uploaded])
-            print(f"[DEBUG] Gemini response: {response.text}")
-            os.remove(temp_path)
-            text_resp = response.text.strip()
-            json_match = re.search(r'\{.*\}', text_resp, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                team1 = data.get("team1", "").strip()
-                team2 = data.get("team2", "").strip()
-                print(f"[DEBUG] Extracted: team1='{team1}', team2='{team2}'")
-            else:
-                print("[DEBUG] No JSON found in Gemini response")
-                db.close()
-                return {"error": "Could not recognize teams from screenshot."}
+            # Читаем байты напрямую (без сохранения на диск)
+            photo_bytes = await photo.read()
+            # Оборачиваем байты в Part
+            image_part = types.Part.from_bytes(
+                data=photo_bytes,
+                mime_type=photo.content_type or "image/png",
+            )
+            # Вызываем актуальную модель Gemini
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",  # если не сработает, замените на gemini-2.5-flash
+                contents=[
+                    image_part,
+                    "Extract football team names from this screenshot. Return only the team names, no extra text."
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=MatchInfo,
+                    temperature=0.1
+                )
+            )
+            # Парсим ответ
+            data = json.loads(response.text)
+            team1 = data.get("team1", "").strip()
+            team2 = data.get("team2", "").strip()
+            print(f"[DEBUG] Gemini extracted: team1='{team1}', team2='{team2}'")
         except Exception as e:
-            print(f"[ERROR] Photo processing exception: {type(e).__name__}: {e}")
+            print(f"[ERROR] Photo processing: {e}")
             db.close()
             return {"error": "Error processing photo."}
     elif text:
