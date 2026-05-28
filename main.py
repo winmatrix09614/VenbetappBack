@@ -48,7 +48,7 @@ import uvicorn
 
 # ---------- Gemini ----------
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-1.5-pro"  # используйте 1.5-pro или 1.5-flash
+MODEL_NAME = "gemini-1.5-flash"  # используйте 1.5-pro или 1.5-flash
 
 # ---------- Кэш для статистики команд ----------
 team_stats_cache = OrderedDict()
