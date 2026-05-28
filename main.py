@@ -6,7 +6,6 @@ import json
 import random
 import time
 import csv
-import cloudscraper
 import requests
 import aiohttp  # добавьте этот импорт в начало файла
 
