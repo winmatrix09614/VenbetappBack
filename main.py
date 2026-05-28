@@ -17,6 +17,47 @@ from io import StringIO
 from dotenv import load_dotenv
 load_dotenv()
 
+# ---- FastAPI и сопутствующие компоненты ----
+from fastapi import (
+    FastAPI, Request, Depends, HTTPException, status,
+    Form, Query, File, UploadFile
+)
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+
+# ---- База данных (SQLAlchemy) ----
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger
+from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
+
+# ---- Хеширование паролей ----
+from passlib.context import CryptContext
+
+# ---- Генерация Excel ----
+from openpyxl import Workbook
+import openpyxl
+
+# ---- Внешние API и парсинг ----
+from google import genai
+from google.genai import types as genai_types
+import feedparser
+import aiohttp
+import httpx
+
+# ---- Aiogram (телеграм-бот) ----
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+
+# ---- Pydantic для валидации ----
+from pydantic import BaseModel
+
+# ---- Uvicorn (сервер) ----
+import uvicorn
+
 # ---------- Переменные окружения ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -24,7 +65,7 @@ API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY")
 
 if not all([BOT_TOKEN, GEMINI_API_KEY, API_FOOTBALL_KEY]):
     print("⚠️ Предупреждение: не все основные переменные окружения заданы. Бот может работать некорректно.")
-
+    
 # ---- Google Gemini SDK ----
 from google import genai
 import feedparser
@@ -171,7 +212,7 @@ with SessionLocal() as db:
     if not db.query(Staff).first():
         admin = Staff(
             username="admin",
-            password_hash=pwd_context.hash("ваш_пароль"),  # ИЗМЕНИТЕ НА СВОЙ ПАРОЛЬ
+            password_hash=pwd_context.hash("admin2025"),
             role="admin",
             is_active=True
         )
