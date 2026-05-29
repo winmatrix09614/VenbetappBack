@@ -1583,7 +1583,19 @@ async def user_history(bet_id: str):
         if not user:
             return {"history": []}
         logs = db.query(PredictionLog).filter(PredictionLog.user_id == user.id).order_by(PredictionLog.created_at.desc()).all()
-        history = [{"created_at": log.created_at.isoformat(), "match_description": log.match_description, "winner": log.winner, "confidence": log.confidence} for log in logs]
+        
+        # Добавляем подгрузку текста анализа и доп. прогнозов в JSON ответ
+        history = [
+            {
+                "created_at": log.created_at.isoformat(), 
+                "match_description": log.match_description, 
+                "winner": log.winner, 
+                "confidence": log.confidence,
+                "analysis_text": log.prediction_text,        # Передаем текст разбора
+                "additional": log.additional_predictions     # Передаем тоталы/угловые
+            } 
+            for log in logs
+        ]
         return {"history": history}
     finally:
         db.close()
