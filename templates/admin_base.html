@@ -7,16 +7,29 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        /* Стили, которые адаптируются под темную/светлую тему */
         body { transition: background-color 0.3s ease; }
         .sidebar { background: #1a1a2e; min-height: 100vh; display: flex; flex-direction: column; }
         .sidebar a { color: #a0a6b5; text-decoration: none; padding: 12px 15px; display: block; border-radius: 6px; margin-bottom: 5px; transition: 0.2s; }
         .sidebar a:hover, .sidebar a.active { background: #2d3343; color: white; }
         .content { padding: 25px; }
         
-        /* Стили для свитчера темы */
-        .theme-switch { cursor: pointer; padding: 10px; color: #a0a6b5; text-align: center; border-top: 1px solid #2d3343; margin-top: auto; }
-        .theme-switch:hover { color: white; }
+        /* Стили для современного тумблера (Солнце / Луна) */
+        .theme-toggle { position: relative; display: inline-block; width: 64px; height: 32px; }
+        .theme-toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-label { 
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; 
+            background-color: #2d3343; border-radius: 32px; transition: .4s; 
+            display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .toggle-label .bi { font-size: 14px; z-index: 1; }
+        .moon-icon { color: #f1c40f; }
+        .sun-icon { color: #f39c12; }
+        .toggle-ball { 
+            position: absolute; height: 24px; width: 24px; left: 4px; bottom: 4px; 
+            background-color: white; border-radius: 50%; transition: .4s; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .toggle-label { background-color: #0d6efd; }
+        input:checked + .toggle-label .toggle-ball { transform: translateX(32px); }
     </style>
 </head>
 <body>
@@ -27,14 +40,22 @@
             <a href="/dashboard"><i class="bi bi-people me-2"></i> Пользователи</a>
             <a href="/logs"><i class="bi bi-clock-history me-2"></i> Логи AI</a>
             
-            <a href="/admin/logout" class="text-danger mt-4"><i class="bi bi-box-arrow-left me-2"></i> Выйти</a>
-            
-            <div class="theme-switch mt-auto" onclick="toggleTheme()">
-                <i class="bi bi-moon-stars" id="themeIcon"></i> <span id="themeText">Темная тема</span>
-            </div>
+            <a href="/admin/logout" class="text-danger mt-auto border-top border-secondary pt-3"><i class="bi bi-box-arrow-left me-2"></i> Выйти</a>
         </div>
         
         <div class="col-md-10 content bg-body-tertiary">
+            
+            <div class="d-flex justify-content-end mb-3">
+                <div class="theme-toggle">
+                    <input type="checkbox" id="themeSwitch" onchange="toggleTheme()">
+                    <label for="themeSwitch" class="toggle-label" title="Переключить тему">
+                        <i class="bi bi-moon-fill moon-icon"></i>
+                        <i class="bi bi-sun-fill sun-icon"></i>
+                        <span class="toggle-ball"></span>
+                    </label>
+                </div>
+            </div>
+
             {% block content %}{% endblock %}
         </div>
     </div>
@@ -42,24 +63,20 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Скрипт для сохранения и переключения темной темы
     function setTheme(theme) {
         document.documentElement.setAttribute('data-bs-theme', theme);
         localStorage.setItem('theme', theme);
-        const icon = document.getElementById('themeIcon');
-        const text = document.getElementById('themeText');
+        const checkbox = document.getElementById('themeSwitch');
         if(theme === 'dark') {
-            icon.className = 'bi bi-sun';
-            text.innerText = 'Светлая тема';
+            checkbox.checked = true;
         } else {
-            icon.className = 'bi bi-moon-stars';
-            text.innerText = 'Темная тема';
+            checkbox.checked = false;
         }
     }
 
     function toggleTheme() {
-        const current = localStorage.getItem('theme') || 'light';
-        setTheme(current === 'light' ? 'dark' : 'light');
+        const checkbox = document.getElementById('themeSwitch');
+        setTheme(checkbox.checked ? 'dark' : 'light');
     }
 
     // Применяем при загрузке
