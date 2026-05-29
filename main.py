@@ -1455,17 +1455,19 @@ async def register_request(
             
         new_user = User(
             telegram_id=telegram_id,
-            bet_id=bet_id,
+            bet_id=clean_bet_id,
             attempts_left=0,
             is_active=False,
             is_banned=False,
             source=source,
             ip_address=ip_address,
+            country=country,
             os_device=os_device,
-            browser=user_agent[:200] # Ограничиваем длину
+            browser=user_agent[:200]
         )
         db.add(new_user)
         db.commit()
+        
         pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
         await notifier.push({"count": pending_count})
         return {"status": "ok", "created": True}
