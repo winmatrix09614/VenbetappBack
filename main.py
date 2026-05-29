@@ -29,6 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # ---- База данных (SQLAlchemy) ----
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
+from sqlalchemy.orm import joinedload
 
 # ---- Хеширование паролей ----
 from passlib.context import CryptContext
@@ -149,6 +150,19 @@ class StaffLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     staff = relationship("Staff")
+
+class BroadcastLog(Base):
+    __tablename__ = "broadcast_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    staff_id = Column(Integer, ForeignKey("staff.id"))
+    segment = Column(String)
+    text = Column(Text) # Текст рассылки (может быть длинным)
+    image_url = Column(String, nullable=True) # Задел на будущее для картинок
+    sent_count = Column(Integer, default=0) # Скольким людям успешно ушло
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    staff = relationship("Staff")    
 
 Base.metadata.create_all(bind=engine)
 
@@ -1022,13 +1036,39 @@ async def run_broadcast_task(segment: str, text: str, staff_id: int):
             except Exception as e:
                 print(f"[BROADCAST ERROR] User {u.id}: {e}")
                 
-        # Логируем успешное завершение
-        log = StaffLog(staff_id=staff_id, action=f"broadcast to '{segment}', sent: {success_count}/{len(users_to_send)}")
+        # Сохраняем детальный лог в новую таблицу
+        broadcast_record = BroadcastLog(
+            staff_id=staff_id,
+            segment=segment,
+            text=text,
+            sent_count=success_count
+        )
+        db.add(broadcast_record)
+        
+        # Оставляем и краткий лог действий сотрудника для истории
+        log = StaffLog(staff_id=staff_id, action=f"broadcast to '{segment}', sent: {success_count}")
         db.add(log)
+        
         db.commit()
         print(f"✅ Рассылка завершена. Успешно: {success_count}/{len(users_to_send)}")
     finally:
         db.close()
+
+# Эндпоинт страницы "История рассылок" (Доступен всем)
+@app.get("/broadcasts", response_class=HTMLResponse)
+async def broadcast_logs_page(request: Request, db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff:
+        return RedirectResponse(url="/admin/login")
+
+    # Загружаем последние 50 рассылок
+    logs = db.query(BroadcastLog).options(joinedload(BroadcastLog.staff)).order_by(BroadcastLog.created_at.desc()).limit(50).all()
+    
+    return templates.TemplateResponse("broadcast_logs.html", {
+        "request": request,
+        "logs": logs,
+        "staff_role": staff.role
+    })
 
 @app.post("/api/broadcast")
 async def api_broadcast(request: Request, data: dict, db: Session = Depends(get_db)):

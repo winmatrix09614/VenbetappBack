@@ -1,0 +1,123 @@
+{% extends "admin_base.html" %}
+{% block title %}История рассылок{% endblock %}
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">📢 История Push-рассылок</h2>
+        {% if staff_role in ['admin', 'manager'] %}
+        <a href="/dashboard" class="btn btn-warning shadow-sm fw-bold">
+            <i class="bi bi-megaphone-fill"></i> Создать новую рассылку
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="card shadow-sm border-0 bg-body-inner">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="ps-4">Дата / Время</th>
+                            <th>Отправитель</th>
+                            <th>Аудитория (Сегмент)</th>
+                            <th>Доставлено</th>
+                            <th class="text-end pe-4">Содержимое</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if not logs %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                История рассылок пока пуста
+                            </td>
+                        </tr>
+                        {% endif %}
+                        
+                        {% for log in logs %}
+                        <tr>
+                            <td class="ps-4 text-muted small">{{ log.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td><span class="badge bg-secondary"><i class="bi bi-person-fill"></i> {{ log.staff.username }}</span></td>
+                            <td>
+                                {% if log.segment == 'active' %} <span class="text-success fw-bold">✅ Активные пользователи</span>
+                                {% elif log.segment == 'dead_souls' %} <span class="text-danger fw-bold">👻 Мертвые души</span>
+                                {% elif log.segment == 'pending' %} <span class="text-warning fw-bold">⏳ Ожидающие</span>
+                                {% elif log.segment == 'zero_limits' %} <span class="text-secondary fw-bold">❌ Баланс 0</span>
+                                {% else %} <span class="text-primary fw-bold">🌍 Вся база</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge text-bg-success fs-6">{{ log.sent_count }} чел.</span></td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-outline-primary view-broadcast" 
+                                    data-text="{{ log.text | escape }}" 
+                                    data-img="{{ log.image_url or '' }}"
+                                    data-date="{{ log.created_at.strftime('%d.%m.%Y %H:%M') }}"
+                                    data-sender="{{ log.staff.username }}">
+                                    <i class="bi bi-eye"></i> Предпросмотр
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="viewBroadcastModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white border-0">
+                <h6 class="modal-title"><i class="bi bi-telegram text-info me-2"></i> Просмотр сообщения</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0 bg-body-tertiary">
+                
+                <div id="previewImageContainer" class="d-none text-center bg-dark">
+                    <img id="previewImage" src="" alt="Вложение" class="img-fluid" style="max-height: 250px; object-fit: contain;">
+                </div>
+                
+                <div class="p-4 bg-body">
+                    <div class="d-flex justify-content-between text-muted small border-bottom pb-2 mb-3">
+                        <span id="previewSender"><i class="bi bi-person"></i> admin</span>
+                        <span id="previewDate"><i class="bi bi-clock"></i> 29.05 18:00</span>
+                    </div>
+                    <div id="previewText" class="text-break" style="font-size: 15px; line-height: 1.5; white-space: pre-wrap;">
+                        Текст сообщения...
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('.view-broadcast').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Подставляем данные в модалку
+            const text = this.dataset.text;
+            const img = this.dataset.img;
+            
+            document.getElementById('previewSender').innerHTML = '<i class="bi bi-person"></i> ' + this.dataset.sender;
+            document.getElementById('previewDate').innerHTML = '<i class="bi bi-clock"></i> ' + this.dataset.date;
+            
+            // Вставляем текст (как HTML, чтобы работали теги <b>, <i>, <a>, которые вставлял менеджер)
+            document.getElementById('previewText').innerHTML = text;
+            
+            // Логика картинки
+            const imgContainer = document.getElementById('previewImageContainer');
+            if (img) {
+                document.getElementById('previewImage').src = img;
+                imgContainer.classList.remove('d-none');
+            } else {
+                imgContainer.classList.add('d-none');
+            }
+            
+            // Показываем
+            new bootstrap.Modal(document.getElementById('viewBroadcastModal')).show();
+        });
+    });
+</script>
+{% endblock %}
