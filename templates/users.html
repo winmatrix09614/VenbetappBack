@@ -5,16 +5,44 @@
     <h2 class="mb-4">👥 Управление пользователями</h2>
     
     <div class="row mb-4">
-        <div class="col-md-3"><div class="card text-white bg-primary"><div class="card-body"><h5 class="card-title">Всего пользователей</h5><p class="card-text display-6">{{ total_users }}</p></div></div></div>
-        <div class="col-md-3"><div class="card text-white bg-success"><div class="card-body"><h5 class="card-title">Активные</h5><p class="card-text display-6">{{ active_users }}</p></div></div></div>
-        <div class="col-md-3"><div class="card text-white bg-warning"><div class="card-body"><h5 class="card-title">Премиум</h5><p class="card-text display-6">{{ premium_users }}</p></div></div></div>
-        <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h5 class="card-title">Прогнозов за 24ч</h5><p class="card-text display-6">{{ predictions_today }}</p></div></div></div>
+        <div class="col-md-3">
+            <div class="card border-0 border-start border-primary border-4 shadow-sm bg-body-inner">
+                <div class="card-body py-3">
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Всего пользователей</h6>
+                    <p class="card-text display-6 fw-bold mb-0 text-body">{{ total_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 border-start border-success border-4 shadow-sm bg-body-inner">
+                <div class="card-body py-3">
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Активные лиды</h6>
+                    <p class="card-text display-6 fw-bold mb-0 text-success">{{ active_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 border-start border-warning border-4 shadow-sm bg-body-inner">
+                <div class="card-body py-3">
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Премиум статус</h6>
+                    <p class="card-text display-6 fw-bold mb-0 text-warning">{{ premium_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 border-start border-info border-4 shadow-sm bg-body-inner">
+                <div class="card-body py-3">
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Прогнозы (24ч)</h6>
+                    <p class="card-text display-6 fw-bold mb-0 text-info">{{ predictions_today }}</p>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div class="row mb-4">
         <div class="col-md-8">
-            <div class="card h-100 shadow-sm border-0 rounded-4">
-                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center pt-3 pb-0">
+            <div class="card h-100 shadow-sm border-0 rounded-4 bg-body-inner">
+                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 pb-0">
                     <h6 class="mb-0 fw-bold">📈 Динамика платформы</h6>
                     <div class="d-flex align-items-center gap-2">
                         <input type="date" id="startDate" class="form-control form-control-sm bg-light border-0 text-secondary" style="width: 120px;">
@@ -60,8 +88,8 @@
         </div>
     </div>
 
-    <div class="card mb-4 shadow-sm border-0">
-        <div class="card-header bg-white">🔍 Расширенный фильтр</div>
+    <div class="card mb-4 shadow-sm border-0 bg-body-inner">
+        <div class="card-header bg-transparent fw-bold text-body">🔍 Расширенный фильтр</div>
         <div class="card-body">
             <form method="get" id="filterForm">
                 <div class="row">
@@ -72,10 +100,21 @@
                     <div class="col-md-3"><label>Дата регистрации</label><select name="date_filter" class="form-select"><option value="">Любая</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
                 </div>
                 <div class="row mt-3">
-                    <div class="col-md-12">
-                        <button type="submit" class="btn btn-primary">Применить фильтр</button>
-                        <a href="/dashboard" class="btn btn-secondary">Сбросить</a>
-                        <button type="button" id="exportCsvBtn" class="btn btn-success float-end">📎 Экспорт CSV</button>
+                    <div class="col-md-12 d-flex justify-content-between align-items-center">
+                        <div>
+                            <button type="submit" class="btn btn-primary px-4 shadow-sm">Применить фильтр</button>
+                            <a href="/dashboard" class="btn btn-outline-secondary px-3 ms-1">Сбросить</a>
+                        </div>
+                        
+                        <div class="dropdown">
+                            <button class="btn btn-success dropdown-toggle shadow-sm d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download"></i> Экспорт данных
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                <li><button type="button" id="exportCsvBtn" class="dropdown-item d-flex align-items-center"><i class="bi bi-filetype-csv text-success me-2 fs-5"></i> Скачать в формате CSV</button></li>
+                                <li><button type="button" id="exportExcelBtn" class="dropdown-item d-flex align-items-center"><i class="bi bi-file-earmark-excel text-primary me-2 fs-5"></i> Скачать в формате Excel (XLSX)</button></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -292,6 +331,10 @@
     document.getElementById('massActivate').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
     document.getElementById('massBan').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
     document.getElementById('exportCsvBtn').addEventListener('click',function(){window.location.href='/export_users_csv?'+new URLSearchParams({search:'{{ search_query }}',status:'{{ status_filter }}',limit_min:'{{ limit_min }}',limit_max:'{{ limit_max }}',date_filter:'{{ date_filter }}'}).toString();});
+    
+    // ЛОГИКА ДЛЯ СКАЧИВАНИЯ EXCEL:
+    document.getElementById('exportExcelBtn').addEventListener('click',function(){window.location.href='/export_users_excel?'+new URLSearchParams({search:'{{ search_query }}',status:'{{ status_filter }}',limit_min:'{{ limit_min }}',limit_max:'{{ limit_max }}',date_filter:'{{ date_filter }}'}).toString();});
+
     document.querySelectorAll('.give-attempts').forEach(btn=>{btn.addEventListener('click',function(){let userId=this.dataset.id,attempts=this.dataset.attempts;fetch('/give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,attempts:parseInt(attempts)})}).then(()=>location.reload());});});
     document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
