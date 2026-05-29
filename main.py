@@ -974,7 +974,21 @@ async def mass_activate(request: Request, data: dict, db: Session = Depends(get_
     return {"status": "ok"}
 
 @app.post("/mass_ban")
-# ... (код mass_ban остается без изменений)
+async def mass_ban(request: Request, data: dict, db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff:
+        raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
+    user_ids = data.get("user_ids", [])
+    for uid in user_ids:
+        user = db.query(User).filter(User.id == uid).first()
+        if user:
+            user.is_banned = True
+            user.is_active = False
+    db.commit()
+    log_staff_action(db, staff.id, f"mass ban users: {user_ids}")
     return {"status": "ok"}
 
 # ---------- Рассылки (Этап 5) ----------
@@ -1029,8 +1043,7 @@ async def api_broadcast(request: Request, data: dict, db: Session = Depends(get_
     if not segment or not text:
         return {"status": "error", "message": "Не указан сегмент или текст"}
         
-    # Запускаем функцию в фоне! Это позволит админке моментально ответить "Ок"
-    # и не висеть, пока бот рассылает 10 000 сообщений.
+    # Запускаем функцию в фоне!
     asyncio.create_task(run_broadcast_task(segment, text, staff.id))
     
     return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
