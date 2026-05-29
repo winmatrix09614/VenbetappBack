@@ -126,7 +126,11 @@
             {% if staff_role in ['admin', 'manager'] %}
             <button type="button" id="massGiveAttempts" class="btn btn-primary shadow-sm me-1"><i class="bi bi-plus-circle"></i> +5 выбранным</button>
             <button type="button" id="massActivate" class="btn btn-success shadow-sm me-1"><i class="bi bi-check-circle"></i> Активировать</button>
-            <button type="button" id="massBan" class="btn btn-danger shadow-sm"><i class="bi bi-slash-circle"></i> Забанить</button>
+            <button type="button" id="massBan" class="btn btn-danger shadow-sm me-2"><i class="bi bi-slash-circle"></i> Забанить</button>
+            
+            <button type="button" class="btn btn-warning shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#broadcastModal">
+                <i class="bi bi-megaphone-fill"></i> Рассылка (Push)
+            </button>
             {% endif %}
         </div>
         <button type="button" class="btn btn-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#utmModal"><i class="bi bi-link-45deg"></i> Генератор UTM</button>
@@ -243,6 +247,77 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="broadcastModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-warning text-dark border-0">
+        <h5 class="modal-title fw-bold"><i class="bi bi-megaphone-fill me-2"></i> Создание рассылки</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 bg-body-inner">
+        
+        <div class="mb-3">
+            <label class="form-label fw-bold small text-muted text-uppercase">Кому отправляем?</label>
+            <select id="broadcastSegment" class="form-select">
+                <option value="dead_souls">👻 Мертвые души (Активированы, но не заходили > 3 дней)</option>
+                <option value="active">✅ Только активные пользователи</option>
+                <option value="pending">⏳ Ожидающие активации (Прогрев)</option>
+                <option value="all">🌍 Все пользователи в базе (Осторожно!)</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-bold small text-muted text-uppercase d-flex justify-content-between">
+                Текст сообщения (поддерживает HTML)
+                <a href="https://core.telegram.org/bots/api#html-style" target="_blank" class="text-decoration-none small"><i class="bi bi-info-circle"></i> Справка по тегам</a>
+            </label>
+            <textarea id="broadcastText" class="form-control" rows="6" placeholder="Например: <b>Привет!</b> Держи бонус..."></textarea>
+            <div class="form-text mt-2">Используйте <code>&lt;b&gt;текст&lt;/b&gt;</code> для жирного, <code>&lt;i&gt;текст&lt;/i&gt;</code> для курсива, <code>&lt;a href="URL"&gt;текст&lt;/a&gt;</code> для ссылок.</div>
+        </div>
+
+        <button class="btn btn-warning w-100 fw-bold shadow-sm" onclick="sendBroadcast()" id="btnSendBroadcast">
+            <i class="bi bi-send-fill"></i> Запустить рассылку
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    function sendBroadcast() {
+        const segment = document.getElementById('broadcastSegment').value;
+        const text = document.getElementById('broadcastText').value.trim();
+        const btn = document.getElementById('btnSendBroadcast');
+        
+        if (!text) return alert("Введите текст сообщения!");
+        if (!confirm("Вы уверены, что хотите запустить рассылку? Это действие нельзя отменить.")) return;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Запуск...';
+        
+        fetch('/api/broadcast', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ segment: segment, text: text })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'ok') {
+                alert("Рассылка успешно запущена в фоновом режиме!");
+                bootstrap.Modal.getInstance(document.getElementById('broadcastModal')).hide();
+                document.getElementById('broadcastText').value = '';
+            } else {
+                alert("Ошибка: " + data.message);
+            }
+        })
+        .catch(e => alert("Ошибка сети"))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send-fill"></i> Запустить рассылку';
+        });
+    }
+</script>
 
 <div class="modal fade" id="utmModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">

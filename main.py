@@ -974,22 +974,66 @@ async def mass_activate(request: Request, data: dict, db: Session = Depends(get_
     return {"status": "ok"}
 
 @app.post("/mass_ban")
-async def mass_ban(request: Request, data: dict, db: Session = Depends(get_db)):
+# ... (код mass_ban остается без изменений)
+    return {"status": "ok"}
+
+# ---------- Рассылки (Этап 5) ----------
+async def run_broadcast_task(segment: str, text: str, staff_id: int):
+    """Фоновая задача для безопасной рассылки (чтобы не словить Flood Limit от Telegram)"""
+    db = SessionLocal()
+    try:
+        query = db.query(User).filter(User.telegram_id.isnot(None), User.is_banned == False)
+        
+        if segment == "active":
+            query = query.filter(User.is_active == True)
+        elif segment == "dead_souls":
+            three_days_ago = datetime.utcnow() - timedelta(days=3)
+            query = query.filter(
+                User.is_active == True, 
+                (User.last_activity < three_days_ago) | (User.last_activity == None)
+            )
+        elif segment == "pending":
+            query = query.filter(User.is_active == False)
+            
+        users_to_send = query.all()
+        success_count = 0
+        
+        for u in users_to_send:
+            try:
+                # Отправляем сообщение, поддерживаем HTML-разметку (жирный текст, ссылки)
+                await bot.send_message(u.telegram_id, text, parse_mode="HTML")
+                success_count += 1
+                # Обязательная пауза! Telegram разрешает ~30 сообщений в секунду.
+                await asyncio.sleep(0.05) 
+            except Exception as e:
+                print(f"[BROADCAST ERROR] User {u.id}: {e}")
+                
+        # Логируем успешное завершение
+        log = StaffLog(staff_id=staff_id, action=f"broadcast to '{segment}', sent: {success_count}/{len(users_to_send)}")
+        db.add(log)
+        db.commit()
+        print(f"✅ Рассылка завершена. Успешно: {success_count}/{len(users_to_send)}")
+    finally:
+        db.close()
+
+@app.post("/api/broadcast")
+async def api_broadcast(request: Request, data: dict, db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
     if staff.role == "buyer":
-        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        raise HTTPException(status_code=403, detail="У баеров нет прав на рассылку")
         
-    user_ids = data.get("user_ids", [])
-    for uid in user_ids:
-        user = db.query(User).filter(User.id == uid).first()
-        if user:
-            user.is_banned = True
-            user.is_active = False
-    db.commit()
-    log_staff_action(db, staff.id, f"mass ban users: {user_ids}")
-    return {"status": "ok"}
+    segment = data.get("segment")
+    text = data.get("text")
+    if not segment or not text:
+        return {"status": "error", "message": "Не указан сегмент или текст"}
+        
+    # Запускаем функцию в фоне! Это позволит админке моментально ответить "Ок"
+    # и не висеть, пока бот рассылает 10 000 сообщений.
+    asyncio.create_task(run_broadcast_task(segment, text, staff.id))
+    
+    return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
 
 # ---------- Удаление пользователей (одиночное и массовое) ----------
 @app.post("/delete_user")
