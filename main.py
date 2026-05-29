@@ -9,6 +9,7 @@ import csv
 import hmac
 import hashlib
 import io
+import urllib.request
 from urllib.parse import parse_qsl
 from datetime import datetime, timedelta
 from collections import OrderedDict
@@ -235,6 +236,22 @@ def validate_telegram_data(init_data: str, bot_token: str) -> dict:
     except Exception as e:
         print(f"[ERROR] Telegram data validation failed: {e}")
         raise ValueError("Invalid Telegram data")
+
+# ---------- Гео-локация по IP ----------
+def fetch_geo(ip: str) -> str:
+    """Синхронная функция запроса к бесплатному API (работает без ключа)"""
+    # Если тест на локальном ПК
+    if ip in ("127.0.0.1", "localhost", "0.0.0.0"): 
+        return "Local"
+    try:
+        # Делаем запрос к ip-api (лимит 45 запросов в минуту, для нас пока хватит)
+        with urllib.request.urlopen(f"http://ip-api.com/json/{ip}?lang=en", timeout=2.0) as response:
+            data = json.loads(response.read().decode())
+            if data.get("status") == "success":
+                return data.get("country") # Вернет "Peru", "Egypt" и т.д.
+    except Exception as e:
+        print(f"[GEO ERROR] Не удалось определить страну для {ip}: {e}")
+    return "Unknown"
 
 # ---------- Telegram бот ----------
 logging.basicConfig(level=logging.INFO)
@@ -1366,6 +1383,9 @@ async def register_request(
         elif "Windows" in user_agent: os_device = "Windows"
         elif "Mac OS" in user_agent: os_device = "macOS"
 
+        # Узнаем страну асинхронно, чтобы не блокировать сервер!
+        country = await asyncio.to_thread(fetch_geo, ip_address)
+
         telegram_id = None
         if init_data:
             validated = validate_telegram_data(init_data, BOT_TOKEN)
@@ -1380,19 +1400,15 @@ async def register_request(
                 existing_user.source = source
             # Обновляем IP при повторном входе
             existing_user.ip_address = ip_address
+            existing_user.country = country  # <--- ДОБАВИЛИ СЮДА
             existing_user.os_device = os_device
             existing_user.browser = user_agent[:200]
             db.commit()
-            return {"status": "ok", "already_exists": True}
-            
+            # ...
         new_user = User(
-            telegram_id=telegram_id,
-            bet_id=clean_bet_id, # Используем очищенный ID
-            attempts_left=0,
-            is_active=False,
-            is_banned=False,
-            source=source,
+            # ...
             ip_address=ip_address,
+            country=country,  # <--- И ДОБАВИЛИ СЮДА
             os_device=os_device,
             browser=user_agent[:200]
         )
