@@ -82,79 +82,95 @@
         </div>
     </div>
 
-    <div class="mb-3 d-flex justify-content-between align-items-center">
+<div class="mb-3 d-flex justify-content-between align-items-center">
         <div>
-            <button type="button" id="massGiveAttempts" class="btn btn-outline-primary shadow-sm">➕ Выдать +5 выбранным</button>
-            <button type="button" id="massActivate" class="btn btn-outline-success shadow-sm">✅ Активировать выбранных</button>
-            <button type="button" id="massBan" class="btn btn-outline-danger shadow-sm">🚫 Забанить выбранных</button>
+            {% if staff_role in ['admin', 'manager'] %}
+            <button type="button" id="massGiveAttempts" class="btn btn-primary shadow-sm me-1"><i class="bi bi-plus-circle"></i> +5 выбранным</button>
+            <button type="button" id="massActivate" class="btn btn-success shadow-sm me-1"><i class="bi bi-check-circle"></i> Активировать</button>
+            <button type="button" id="massBan" class="btn btn-danger shadow-sm"><i class="bi bi-slash-circle"></i> Забанить</button>
+            {% endif %}
         </div>
-        <button type="button" class="btn btn-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#utmModal">🔗 Генератор UTM-ссылок</button>
+        <button type="button" class="btn btn-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#utmModal"><i class="bi bi-link-45deg"></i> Генератор UTM</button>
     </div>
 
-    <div class="table-responsive shadow-sm rounded-3">
-        <table class="table table-bordered table-hover align-middle" id="usersTable">
+    <div class="table-responsive shadow-sm rounded-3 bg-body">
+        <table class="table table-hover align-middle mb-0" id="usersTable">
             <thead class="table-dark">
                 <tr>
-                    <th><input type="checkbox" id="selectAll"></th>
+                    <th><input type="checkbox" id="selectAll" class="form-check-input"></th>
                     <th>ID</th>
-                    <th>Telegram ID</th>
                     <th>1xBet ID</th>
                     <th>Username</th>
                     <th>Источник</th>
                     <th>Лимит</th>
-                    <th>Активен</th>
-                    <th>Забанен</th>
+                    <th>Статус</th>
                     <th>Premium</th>
-                    <th>Действия</th>
+                    <th class="text-end">Действия</th>
                 </tr>
             </thead>
             <tbody>
                 {% for u in users %}
                 <tr>
-                    <td><input type="checkbox" class="userCheckbox" data-user-id="{{ u.id }}"></td>
-                    <td>{{ u.id }}</td>
-                    <td>{{ u.telegram_id or '-' }}</td>
-                    <td>{{ u.bet_id }}</td>
-                    <td>{{ u.username or '-' }}</td>
-                    <td><span class="badge bg-light text-secondary border">{{ u.source or 'Органика' }}</span></td>
-                    <td><strong>{{ u.attempts_left }}</strong></td>
-                    <td>{{ '✅' if u.is_active else '❌' }}</td>
-                    <td>{{ '🚫' if u.is_banned else '—' }}</td>
-                    <td>{{ '⭐' if u.is_premium else '—' }}</td>
+                    <td><input type="checkbox" class="userCheckbox form-check-input" data-user-id="{{ u.id }}"></td>
+                    <td class="text-muted small">#{{ u.id }}</td>
+                    <td class="fw-bold">{{ u.bet_id }}</td>
+                    <td>{{ '@'+u.username if u.username else '-' }}</td>
+                    <td><span class="badge rounded-pill text-bg-secondary">{{ u.source or 'Organic' }}</span></td>
+                    <td><span class="badge text-bg-primary fs-6">{{ u.attempts_left }}</span></td>
                     <td>
-                        <div class="btn-group btn-group-sm shadow-sm">
-                            <button class="btn btn-dark btn-sm open-profile" title="Профиль и Трекер"
-                                data-id="{{ u.id }}" 
-                                data-tg="{{ u.telegram_id or '—' }}" 
-                                data-bet="{{ u.bet_id }}"
-                                data-username="{{ u.username or '—' }}" 
-                                data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
-                                data-ip="{{ u.ip_address or '—' }}" 
-                                data-country="{{ u.country or '—' }}"
-                                data-os="{{ u.os_device or '—' }}" 
-                                data-browser="{{ u.browser or '—' }}"
-                                data-source="{{ u.source or 'Органика' }}">
-                                👁️
+                        {% if u.is_banned %} <span class="badge text-bg-danger">Бан</span>
+                        {% elif u.is_active %} <span class="badge text-bg-success">Активен</span>
+                        {% else %} <span class="badge text-bg-warning">Ожидает</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ '⭐' if u.is_premium else '—' }}</td>
+                    
+                    <td class="text-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-three-dots"></i>
                             </button>
-                            
-                            <button class="btn btn-success btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="1">+1</button>
-                            <button class="btn btn-info btn-sm give-attempts" data-id="{{ u.id }}" data-attempts="5">+5</button>
-                            
-                            <form method="post" action="/approve" style="display:inline;">
-                                <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <input type="number" name="attempts" value="50" style="width:60px; display:inline;">
-                                <button type="submit" class="btn btn-warning btn-sm">Акт.</button>
-                            </form>
-                            
-                            <form method="post" action="/ban" style="display:inline;">
-                                <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <button type="submit" class="btn btn-danger btn-sm">Бан</button>
-                            </form>
-                            
-                            <form method="post" action="/premium" style="display:inline;">
-                                <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <button type="submit" class="btn btn-secondary btn-sm">Premium</button>
-                            </form>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                                <li>
+                                    <button class="dropdown-item open-profile d-flex align-items-center"
+                                        data-id="{{ u.id }}" data-tg="{{ u.telegram_id or '—' }}" data-bet="{{ u.bet_id }}"
+                                        data-username="{{ u.username or '—' }}" data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
+                                        data-ip="{{ u.ip_address or '—' }}" data-country="{{ u.country or '—' }}"
+                                        data-os="{{ u.os_device or '—' }}" data-browser="{{ u.browser or '—' }}"
+                                        data-source="{{ u.source or 'Органика' }}">
+                                        <i class="bi bi-eye text-primary me-2"></i> Профиль лида
+                                    </button>
+                                </li>
+                                
+                                {% if staff_role in ['admin', 'manager'] %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><button class="dropdown-item give-attempts" data-id="{{ u.id }}" data-attempts="1"><i class="bi bi-plus text-success me-2"></i>Выдать +1 лимит</button></li>
+                                <li><button class="dropdown-item give-attempts" data-id="{{ u.id }}" data-attempts="5"><i class="bi bi-plus-circle text-success me-2"></i>Выдать +5 лимитов</button></li>
+                                
+                                <li>
+                                    <form method="post" action="/approve" class="px-3 py-1 d-flex align-items-center">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <input type="number" name="attempts" value="50" class="form-control form-control-sm me-2" style="width: 70px;">
+                                        <button type="submit" class="btn btn-sm btn-warning w-100">Активировать</button>
+                                    </form>
+                                </li>
+                                
+                                <li><hr class="dropdown-divider"></li>
+                                
+                                <li>
+                                    <form method="post" action="/premium" class="m-0">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <button type="submit" class="dropdown-item text-secondary"><i class="bi bi-star-fill text-warning me-2"></i>Дать Premium</button>
+                                    </form>
+                                </li>
+                                <li>
+                                    <form method="post" action="/ban" class="m-0">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-ban text-danger me-2"></i>Забанить</button>
+                                    </form>
+                                </li>
+                                {% endif %}
+                            </ul>
                         </div>
                     </td>
                 </tr>
@@ -162,7 +178,6 @@
             </tbody>
         </table>
     </div>
-
     <div class="row mt-3">
         <div class="col-md-3">
             <select id="perPageSelect" class="form-select w-auto d-inline-block">

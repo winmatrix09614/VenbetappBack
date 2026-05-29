@@ -784,6 +784,7 @@ async def admin_dashboard(
     })
 
 # ---------- Управление пользователями (approve, ban, premium) ----------
+# ---------- Управление пользователями (approve, ban, premium) ----------
 @app.post("/approve")
 async def approve_user(
     request: Request,
@@ -794,6 +795,9 @@ async def approve_user(
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         user.is_active = True
@@ -814,6 +818,9 @@ async def ban_user(request: Request, user_id: int = Form(...), db: Session = Dep
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         user.is_banned = True
@@ -832,6 +839,9 @@ async def set_premium(request: Request, user_id: int = Form(...), db: Session = 
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         user.is_premium = True
@@ -849,6 +859,9 @@ async def give_attempts(request: Request, data: dict, db: Session = Depends(get_
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user_id = data.get("user_id")
     attempts = data.get("attempts", 0)
     user = db.query(User).filter(User.id == user_id).first()
@@ -864,6 +877,9 @@ async def mass_give_attempts(request: Request, data: dict, db: Session = Depends
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user_ids = data.get("user_ids", [])
     attempts = data.get("attempts", 0)
     for uid in user_ids:
@@ -879,6 +895,9 @@ async def mass_activate(request: Request, data: dict, db: Session = Depends(get_
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user_ids = data.get("user_ids", [])
     for uid in user_ids:
         user = db.query(User).filter(User.id == uid).first()
@@ -894,6 +913,9 @@ async def mass_ban(request: Request, data: dict, db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
     if not staff:
         raise HTTPException(status_code=401)
+    if staff.role == "buyer":
+        raise HTTPException(status_code=403, detail="У баеров нет прав на это действие")
+        
     user_ids = data.get("user_ids", [])
     for uid in user_ids:
         user = db.query(User).filter(User.id == uid).first()
