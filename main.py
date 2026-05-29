@@ -789,14 +789,16 @@ async def admin_dashboard(
         "staff_role": staff.role
     })
 
-# ---------- Панель Баеров (Карточки лидов) ----------
+# ---------- Панель Баеров (Аналитика трафика) ----------
 @app.get("/buyer/leads", response_class=HTMLResponse)
 async def buyer_leads_page(
     request: Request,
     search: str = Query(None),
     status: str = Query(None),
+    country: str = Query(None), # НОВЫЙ ФИЛЬТР
+    source: str = Query(None),  # НОВЫЙ ФИЛЬТР
     page: int = Query(1),
-    per_page: int = Query(24), # 24 карточки хорошо делятся на сетку
+    per_page: int = Query(50),  # Для таблицы делаем 50 по умолчанию
     db: Session = Depends(get_db)
 ):
     staff = await get_current_staff(request, db)
@@ -818,6 +820,16 @@ async def buyer_leads_page(
     elif status == "pending":
         query = query.filter(User.is_active == False, User.is_banned == False)
 
+    # Применяем новые фильтры
+    if country:
+        query = query.filter(User.country == country)
+    if source:
+        query = query.filter(User.source == source)
+
+    # Получаем списки всех уникальных Гео и Источников для выпадающих меню
+    distinct_countries = [r[0] for r in db.query(User.country).distinct().all() if r[0]]
+    distinct_sources = [r[0] for r in db.query(User.source).distinct().all() if r[0]]
+
     total = query.count()
     total_pages = max(1, (total + per_page - 1) // per_page)
     offset = (page - 1) * per_page
@@ -830,9 +842,13 @@ async def buyer_leads_page(
         "total_pages": total_pages,
         "search_query": search or "",
         "status_filter": status or "",
+        "country_filter": country or "",
+        "source_filter": source or "",
+        "distinct_countries": distinct_countries,
+        "distinct_sources": distinct_sources,
         "staff_role": staff.role
     })
-    
+
 # ---------- Управление пользователями (approve, ban, premium) ----------
 @app.post("/approve")
 async def approve_user(

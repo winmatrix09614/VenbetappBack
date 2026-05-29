@@ -13,78 +13,100 @@
     <div class="card mb-4 shadow-sm border-0 bg-body-inner">
         <div class="card-body py-3">
             <form method="get" id="filterForm" class="row align-items-end g-3">
-                <div class="col-md-5">
-                    <label class="form-label small text-muted fw-bold">Поиск (1xBet ID, TG)</label>
-                    <input type="text" name="search" class="form-control" value="{{ search_query }}">
-                </div>
                 <div class="col-md-3">
-                    <label class="form-label small text-muted fw-bold">Статус лида</label>
-                    <select name="status" class="form-select">
+                    <label class="form-label small text-muted fw-bold">Поиск (1xBet ID, TG)</label>
+                    <input type="text" name="search" class="form-control form-control-sm" value="{{ search_query }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted fw-bold">Статус</label>
+                    <select name="status" class="form-select form-select-sm">
                         <option value="">Все статусы</option>
-                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен (Играет)</option>
-                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает активации</option>
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option>
+                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option>
                         <option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option>
                     </select>
                 </div>
-                <div class="col-md-4 text-end">
-                    <button type="submit" class="btn btn-primary px-4 shadow-sm">Найти</button>
-                    <a href="/buyer/leads" class="btn btn-outline-secondary px-3 ms-1">Сброс</a>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted fw-bold">Гео (Страна)</label>
+                    <select name="country" class="form-select form-select-sm">
+                        <option value="">Все страны</option>
+                        {% for c in distinct_countries %}
+                        <option value="{{ c }}" {% if country_filter == c %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted fw-bold">Источник (Кампания)</label>
+                    <select name="source" class="form-select form-select-sm">
+                        <option value="">Все источники</option>
+                        {% for s in distinct_sources %}
+                        <option value="{{ s }}" {% if source_filter == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button type="submit" class="btn btn-sm btn-primary px-3 shadow-sm w-100 mb-1">Найти</button>
+                    <a href="/buyer/leads" class="btn btn-sm btn-outline-secondary w-100">Сброс</a>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="row g-3">
-        {% for u in users %}
-        <div class="col-xl-3 col-lg-4 col-md-6">
-            <div class="card h-100 shadow-sm border-0 lead-card bg-body" style="cursor: pointer; transition: transform 0.2s;"
-                 data-id="{{ u.id }}" 
-                 data-tg="{{ u.telegram_id or '—' }}" 
-                 data-bet="{{ u.bet_id }}"
-                 data-username="{{ u.username or '—' }}" 
-                 data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
-                 data-ip="{{ u.ip_address or '—' }}" 
-                 data-country="{{ u.country or '—' }}"
-                 data-os="{{ u.os_device or '—' }}" 
-                 data-browser="{{ u.browser or '—' }}"
-                 data-source="{{ u.source or 'Органика' }}">
-                
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="badge rounded-pill text-bg-secondary" style="font-size: 11px;">{{ u.source or 'Organic' }}</span>
-                        {% if u.is_banned %}
-                            <span class="badge bg-danger rounded-circle p-2" title="Забанен"><i class="bi bi-slash-circle text-white"></i></span>
-                        {% elif u.is_active %}
-                            <span class="badge bg-success rounded-circle p-2" title="Активен"><i class="bi bi-check-circle text-white"></i></span>
-                        {% else %}
-                            <span class="badge bg-warning rounded-circle p-2" title="Ожидает"><i class="bi bi-clock text-dark"></i></span>
+    <div class="table-responsive shadow-sm rounded-3 bg-body">
+        <table class="table table-hover table-sm align-middle mb-0 tracker-table">
+            <thead class="table-dark">
+                <tr>
+                    <th class="ps-3 py-2">ID</th>
+                    <th>Дата / Время</th>
+                    <th>1xBet ID</th>
+                    <th>Статус</th>
+                    <th>Гео</th>
+                    <th>OS</th>
+                    <th>Источник (UTM)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr class="lead-row cursor-pointer" 
+                    data-id="{{ u.id }}" 
+                    data-tg="{{ u.telegram_id or '—' }}" 
+                    data-bet="{{ u.bet_id }}"
+                    data-username="{{ u.username or '—' }}" 
+                    data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
+                    data-ip="{{ u.ip_address or '—' }}" 
+                    data-country="{{ u.country or '—' }}"
+                    data-os="{{ u.os_device or '—' }}" 
+                    data-browser="{{ u.browser or '—' }}"
+                    data-source="{{ u.source or 'Органика' }}">
+                    
+                    <td class="ps-3 text-muted small">#{{ u.id }}</td>
+                    <td class="small">{{ u.created_at.strftime('%d.%m.%y %H:%M') }}</td>
+                    <td class="fw-bold text-primary">{{ u.bet_id }}</td>
+                    <td>
+                        {% if u.is_banned %} <span class="badge text-bg-danger" style="font-size: 10px;">Бан</span>
+                        {% elif u.is_active %} <span class="badge text-bg-success" style="font-size: 10px;">Активен</span>
+                        {% else %} <span class="badge text-bg-warning" style="font-size: 10px;">Ожидает</span>
                         {% endif %}
-                    </div>
-                    
-                    <h5 class="fw-bold mb-1 text-primary">{{ u.bet_id }}</h5>
-                    <div class="text-muted small mb-3">
-                        <i class="bi bi-telegram text-info"></i> {{ '@'+u.username if u.username else 'Нет TG' }}
-                    </div>
-                    
-                    <div class="d-flex justify-content-between text-body-secondary" style="font-size: 12px;">
-                        <span><i class="bi bi-calendar-event"></i> {{ u.created_at.strftime('%d.%m.%Y') }}</span>
-                        <span><i class="bi bi-globe"></i> {{ u.country or '—' }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
+                    </td>
+                    <td class="small"><i class="bi bi-globe2 text-muted"></i> {{ u.country or '—' }}</td>
+                    <td class="small text-muted">{{ u.os_device or '—' }}</td>
+                    <td><span class="badge rounded-pill text-bg-secondary fw-normal" style="font-size: 11px;">{{ u.source or 'Organic' }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
-    <div class="mt-4 d-flex justify-content-center">
+    <div class="mt-4 d-flex justify-content-between align-items-center">
+        <div class="small text-muted">Показано по 50 записей</div>
         <nav>
-            <ul class="pagination">
+            <ul class="pagination pagination-sm mb-0">
                 {% if page > 1 %}
-                <li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Назад</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if country_filter %}&country={{ country_filter }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}">Назад</a></li>
                 {% endif %}
-                <li class="page-item active"><a class="page-link" href="#">Страница {{ page }} из {{ total_pages }}</a></li>
+                <li class="page-item active"><a class="page-link" href="#">Стр. {{ page }} из {{ total_pages }}</a></li>
                 {% if page < total_pages %}
-                <li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Вперёд</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if country_filter %}&country={{ country_filter }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}">Вперёд</a></li>
                 {% endif %}
             </ul>
         </nav>
@@ -92,7 +114,8 @@
 </div>
 
 <style>
-    .lead-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; border: 1px solid #0d6efd !important; }
+    .cursor-pointer { cursor: pointer; }
+    .tracker-table tbody tr:hover { background-color: rgba(13, 110, 253, 0.05); }
 </style>
 
 <div class="modal fade" id="utmModal" tabindex="-1" aria-hidden="true">
@@ -100,10 +123,9 @@
     <div class="modal-content border-0 shadow">
       <div class="modal-header bg-dark text-white border-0">
         <h5 class="modal-title">🔗 Генератор реферальных ссылок</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-4">
-        <p class="text-muted small mb-3">Создайте уникальную ссылку для рекламы.</p>
         <label class="form-label fw-bold small">Имя источника бота (Username):</label>
         <div class="input-group mb-3"><span class="input-group-text bg-light">@</span><input type="text" id="botUsername" class="form-control" value="VenbetApp_bot"></div>
         <label class="form-label fw-bold small">Название кампании (Source):</label>
@@ -165,9 +187,9 @@
     }
     function copyLink() { navigator.clipboard.writeText(document.getElementById('resultLink').innerText).then(() => alert('Ссылка скопирована!')); }
 
-    // Логика клика по всей карточке лида
-    document.querySelectorAll('.lead-card').forEach(card => {
-        card.addEventListener('click', async function() {
+    // Логика клика по СТРОКЕ ТАБЛИЦЫ
+    document.querySelectorAll('.lead-row').forEach(row => {
+        row.addEventListener('click', async function() {
             const ds = this.dataset;
             document.getElementById('ocUserId').innerText = ds.id;
             document.getElementById('ocUsername').innerText = ds.username !== '—' ? '@' + ds.username : '—';
