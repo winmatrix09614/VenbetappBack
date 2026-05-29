@@ -1349,41 +1349,29 @@ async def register_request(
     db: Session = Depends(get_db)
 ):
     try:
-        # --- 🛡️ ЭТАП 6: Умная пре-валидация (Антифрод) ---
-        # Очищаем от случайных пробелов
+        # --- 1. Антифрод и Валидация ---
         clean_bet_id = bet_id.strip()
-        
-        # 1. Проверка на то, что это вообще цифры
         if not clean_bet_id.isdigit():
             return {"status": "error", "message": "ID аккаунта должен содержать только цифры."}
             
-        # 2. Проверка по валидным префиксам (Защита от генераторов случайных чисел)
-        # Добавь сюда актуальные префиксы твоих гео
-        valid_prefixes = ("168", "169", "170", "171", "172", "173", "174", "175") 
-        
+        valid_prefixes = ("168", "169", "170", "171", "172", "173", "174", "175", "201", "202") 
         if not clean_bet_id.startswith(valid_prefixes):
-            # Мы не говорим юзеру, какие префиксы правильные, чтобы усложнить жизнь ботоводам
-            print(f"🛑 [ANTI-FRAUD] Заблокирована попытка регистрации с неверным префиксом: {clean_bet_id}")
-            return {"status": "error", "message": "Неверный формат ID. Пожалуйста, проверьте данные в личном кабинете."}
-        # ---------------------------------------------------
+            print(f"🛑 [ANTI-FRAUD] Блок: {clean_bet_id}")
+            return {"status": "error", "message": "Неверный формат ID."}
 
-        # Вытаскиваем IP и User-Agent (Устройство)
+        # --- 2. Сбор данных (Гео, IP, Устройство) ---
         ip_address = request.client.host
-        # Если бэкенд за Cloudflare или Railway Proxy, реальный IP лежит в заголовке X-Forwarded-For
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            ip_address = forwarded_for.split(",")[0]
+            ip_address = forwarded_for.split(",")[0].strip()
             
         user_agent = request.headers.get("User-Agent", "Unknown")
-        
-        # Простейший парсинг устройства
         os_device = "Unknown"
         if "iPhone" in user_agent or "iPad" in user_agent: os_device = "iOS"
         elif "Android" in user_agent: os_device = "Android"
         elif "Windows" in user_agent: os_device = "Windows"
         elif "Mac OS" in user_agent: os_device = "macOS"
 
-        # Узнаем страну асинхронно, чтобы не блокировать сервер!
         country = await asyncio.to_thread(fetch_geo, ip_address)
 
         telegram_id = None
@@ -1392,67 +1380,37 @@ async def register_request(
             user_data = json.loads(validated.get('user', '{}'))
             telegram_id = user_data.get('id')
             
+        # --- 3. УМНАЯ МАРШРУТИЗАЦИЯ (Восстановленная логика) ---
+        
+        # СЦЕНАРИЙ А: Юзер меняет ID (Telegram ID уже есть в базе)
+        if telegram_id:
+            user_by_tg = db.query(User).filter(User.telegram_id == telegram_id).first()
+            if user_by_tg:
+                user_by_tg.bet_id = clean_bet_id
+                user_by_tg.ip_address = ip_address
+                user_by_tg.country = country
+                user_by_tg.os_device = os_device
+                user_by_tg.browser = user_agent[:200]
+                if source:
+                    user_by_tg.source = source
+                db.commit()
+                return {"status": "ok", "created": True} # Отвечаем ОК, чтобы фронтенд пропустил дальше
+
+        # СЦЕНАРИЙ Б: Кто-то заходит под существующим 1xBet ID
         existing_user = db.query(User).filter(User.bet_id == clean_bet_id).first()
         if existing_user:
             if existing_user.telegram_id is None and telegram_id is not None:
                 existing_user.telegram_id = telegram_id
             if source and not existing_user.source:
                 existing_user.source = source
-            # Обновляем IP при повторном входе
             existing_user.ip_address = ip_address
-            existing_user.country = country  # <--- ДОБАВИЛИ СЮДА
+            existing_user.country = country
             existing_user.os_device = os_device
             existing_user.browser = user_agent[:200]
             db.commit()
-            # ...
-        new_user = User(
-            # ...
-            ip_address=ip_address,
-            country=country,  # <--- И ДОБАВИЛИ СЮДА
-            os_device=os_device,
-            browser=user_agent[:200]
-        )
-        db.add(new_user)
-        db.commit()
-        pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
-        await notifier.push({"count": pending_count})
-        return {"status": "ok", "created": True}
-    except Exception as e:
-        print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
-        return {"status": "error", "message": str(e)}
-        # Если бэкенд за Cloudflare или Railway Proxy, реальный IP лежит в заголовке X-Forwarded-For
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if forwarded_for:
-            ip_address = forwarded_for.split(",")[0]
-            
-        user_agent = request.headers.get("User-Agent", "Unknown")
-        
-        # Простейший парсинг устройства
-        os_device = "Unknown"
-        if "iPhone" in user_agent or "iPad" in user_agent: os_device = "iOS"
-        elif "Android" in user_agent: os_device = "Android"
-        elif "Windows" in user_agent: os_device = "Windows"
-        elif "Mac OS" in user_agent: os_device = "macOS"
-
-        telegram_id = None
-        if init_data:
-            validated = validate_telegram_data(init_data, BOT_TOKEN)
-            user_data = json.loads(validated.get('user', '{}'))
-            telegram_id = user_data.get('id')
-            
-        existing_user = db.query(User).filter(User.bet_id == bet_id).first()
-        if existing_user:
-            if existing_user.telegram_id is None and telegram_id is not None:
-                existing_user.telegram_id = telegram_id
-            if source and not existing_user.source:
-                existing_user.source = source
-            # Обновляем IP при повторном входе
-            existing_user.ip_address = ip_address
-            existing_user.os_device = os_device
-            existing_user.browser = user_agent[:200] # Сохраняем часть юзер-агента
-            db.commit()
             return {"status": "ok", "already_exists": True}
             
+        # СЦЕНАРИЙ В: Абсолютно новый пользователь
         new_user = User(
             telegram_id=telegram_id,
             bet_id=clean_bet_id,
@@ -1471,6 +1429,7 @@ async def register_request(
         pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
         await notifier.push({"count": pending_count})
         return {"status": "ok", "created": True}
+        
     except Exception as e:
         print(f"[ERROR] Register error for bet_id={bet_id}: {e}")
         return {"status": "error", "message": str(e)}
