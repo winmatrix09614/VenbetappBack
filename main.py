@@ -574,7 +574,13 @@ async def staff_login(request: Request, username: str = Form(...), password: str
     staff.session_token = session_token
     staff.last_login = datetime.utcnow()
     db.commit()
-    response = RedirectResponse(url="/dashboard", status_code=303)
+    
+    # Умный редирект по ролям
+    if staff.role == "buyer":
+        response = RedirectResponse(url="/buyer/leads", status_code=303)
+    else:
+        response = RedirectResponse(url="/dashboard", status_code=303)
+        
     response.set_cookie(key="staff_session", value=session_token, httponly=True, max_age=86400*7)
     return response
 
@@ -783,7 +789,50 @@ async def admin_dashboard(
         "staff_role": staff.role
     })
 
-# ---------- Управление пользователями (approve, ban, premium) ----------
+# ---------- Панель Баеров (Карточки лидов) ----------
+@app.get("/buyer/leads", response_class=HTMLResponse)
+async def buyer_leads_page(
+    request: Request,
+    search: str = Query(None),
+    status: str = Query(None),
+    page: int = Query(1),
+    per_page: int = Query(24), # 24 карточки хорошо делятся на сетку
+    db: Session = Depends(get_db)
+):
+    staff = await get_current_staff(request, db)
+    if not staff:
+        return RedirectResponse(url="/admin/login")
+
+    query = db.query(User)
+    
+    if search:
+        query = query.filter(
+            (User.telegram_id.cast(String).contains(search)) |
+            (User.bet_id.contains(search)) |
+            (User.username.contains(search))
+        )
+    if status == "active":
+        query = query.filter(User.is_active == True, User.is_banned == False)
+    elif status == "banned":
+        query = query.filter(User.is_banned == True)
+    elif status == "pending":
+        query = query.filter(User.is_active == False, User.is_banned == False)
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+    users = query.order_by(User.created_at.desc()).offset(offset).limit(per_page).all()
+
+    return templates.TemplateResponse("buyer_leads.html", {
+        "request": request,
+        "users": users,
+        "page": page,
+        "total_pages": total_pages,
+        "search_query": search or "",
+        "status_filter": status or "",
+        "staff_role": staff.role
+    })
+    
 # ---------- Управление пользователями (approve, ban, premium) ----------
 @app.post("/approve")
 async def approve_user(
