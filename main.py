@@ -1349,17 +1349,22 @@ async def register_request(
     db: Session = Depends(get_db)
 ):
     try:
-        # --- 1. Антифрод и Валидация ---
+        # --- ОТЛАДОЧНЫЕ ЛОГИ ДЛЯ ПРОВЕРКИ ТЕЛЕГРАМА ---
+        print(f"=========================================")
+        print(f"🔍 [DEBUG REG] Пришел запрос для bet_id: {bet_id}")
+        print(f"🔍 [DEBUG REG] Наличие init_data: {'ДА' if init_data else 'НЕТ (ПУСТО)'}")
+        if init_data:
+            print(f"🔍 [DEBUG REG] Сырой init_data: {init_data[:100]}...") 
+        # ----------------------------------------------
+
         clean_bet_id = bet_id.strip()
         if not clean_bet_id.isdigit():
             return {"status": "error", "message": "ID аккаунта должен содержать только цифры."}
             
         valid_prefixes = ("168", "169", "170", "171", "172", "173", "174", "175", "201", "202") 
         if not clean_bet_id.startswith(valid_prefixes):
-            print(f"🛑 [ANTI-FRAUD] Блок: {clean_bet_id}")
             return {"status": "error", "message": "Неверный формат ID."}
 
-        # --- 2. Сбор данных (Гео, IP, Устройство) ---
         ip_address = request.client.host
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
@@ -1375,18 +1380,27 @@ async def register_request(
         country = await asyncio.to_thread(fetch_geo, ip_address)
 
         telegram_id = None
+        username = None  # Добавили явную переменную для юзернейма
+        
         if init_data:
-            validated = validate_telegram_data(init_data, BOT_TOKEN)
-            user_data = json.loads(validated.get('user', '{}'))
-            telegram_id = user_data.get('id')
+            try:
+                validated = validate_telegram_data(init_data, BOT_TOKEN)
+                print(f"🔍 [DEBUG REG] Результат валидации: {validated}")
+                user_data = json.loads(validated.get('user', '{}'))
+                telegram_id = user_data.get('id')
+                username = user_data.get('username')
+                print(f"🔍 [DEBUG REG] Успешно распарсили: TG_ID={telegram_id}, USR={username}")
+            except Exception as val_err:
+                print(f"🛑 [DEBUG REG] Ошибка валидации паспорта Телеграма: {val_err}")
             
-        # --- 3. УМНАЯ МАРШРУТИЗАЦИЯ (Восстановленная логика) ---
+        print(f"=========================================")
         
         # СЦЕНАРИЙ А: Юзер меняет ID (Telegram ID уже есть в базе)
         if telegram_id:
             user_by_tg = db.query(User).filter(User.telegram_id == telegram_id).first()
             if user_by_tg:
                 user_by_tg.bet_id = clean_bet_id
+                user_by_tg.username = username
                 user_by_tg.ip_address = ip_address
                 user_by_tg.country = country
                 user_by_tg.os_device = os_device
@@ -1394,13 +1408,14 @@ async def register_request(
                 if source:
                     user_by_tg.source = source
                 db.commit()
-                return {"status": "ok", "created": True} # Отвечаем ОК, чтобы фронтенд пропустил дальше
+                return {"status": "ok", "created": True}
 
         # СЦЕНАРИЙ Б: Кто-то заходит под существующим 1xBet ID
         existing_user = db.query(User).filter(User.bet_id == clean_bet_id).first()
         if existing_user:
             if existing_user.telegram_id is None and telegram_id is not None:
                 existing_user.telegram_id = telegram_id
+                existing_user.username = username
             if source and not existing_user.source:
                 existing_user.source = source
             existing_user.ip_address = ip_address
@@ -1414,6 +1429,7 @@ async def register_request(
         new_user = User(
             telegram_id=telegram_id,
             bet_id=clean_bet_id,
+            username=username, # Не забываем записать юзернейм
             attempts_left=0,
             is_active=False,
             is_banned=False,
