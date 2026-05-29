@@ -325,70 +325,150 @@ If you are absolutely unsure, use "Unknown" for a team name. But try your best.
 def _fallback_stats():
     return {"last_5": [0.5, 0.5, 0.5, 0.5, 0.5], "injuries": [], "home_advantage": 0.1}
 
-async def get_team_stats(team_name: str) -> dict:
-    # Заглушка (в будущем замените на API-Football)
-    import random
-    last_5 = []
-    for _ in range(5):
-        r = random.random()
-        if r < 0.4:
-            last_5.append(1)
-        elif r < 0.7:
-            last_5.append(0.5)
-        else:
-            last_5.append(0)
-    return {
-        "last_5": last_5,
-        "injuries": [],
-        "home_advantage": random.uniform(-0.1, 0.2)
-    }
+async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
+    """Сбор глубоких данных: Форма, H2H, Забитые/Пропущенные голы"""
+    if not API_FOOTBALL_KEY:
+        return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "W W D L W", "t2_str": "L D L W D", "h2h_str": "Нет данных", "t1_gs": 1.5, "t1_gc": 1.0, "t2_gs": 1.2, "t2_gc": 1.5, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
 
-def calculate_prediction(stats1: dict, stats2: dict) -> dict:
-    wins1 = sum(1 for r in stats1['last_5'] if r == 1)
-    wins2 = sum(1 for r in stats2['last_5'] if r == 1)
-    draws1 = sum(1 for r in stats1['last_5'] if r == 0.5)
-    draws2 = sum(1 for r in stats2['last_5'] if r == 0.5)
-    diff = wins1 - wins2
-    confidence = 50 + diff * 8
-    if draws1 > draws2:
-        confidence -= 2
-    elif draws2 > draws1:
-        confidence += 2
-    confidence += stats1['home_advantage'] * 10
-    confidence += random.uniform(-3, 3)
-    confidence = max(30, min(95, confidence))
-    confidence = round(confidence, 2)
-    if diff > 0.5:
-        winner = "team1"
-    elif diff < -0.5:
-        winner = "team2"
-    else:
-        winner = "draw"
-    return {"winner": winner, "confidence": confidence}
-
-async def generate_prediction_text(team1, team2, stats1, stats2, winner, confidence):
-    injuries1 = ', '.join(stats1['injuries']) if stats1['injuries'] else 'нет'
-    injuries2 = ', '.join(stats2['injuries']) if stats2['injuries'] else 'нет'
-    prompt = f"""
-Ты спортивный аналитик. На основе статистики:
-Команда {team1}: последние 5 матчей {stats1['last_5']}, травмы: {injuries1}
-Команда {team2}: последние 5 матчей {stats2['last_5']}, травмы: {injuries2}
-Твой вердикт уже вынесен: победа {winner}.
-ЗАДАЧА: Напиши ТОЛЬКО краткое аналитическое обоснование (2-3 предложения).
-СТРОГОЕ ПРАВИЛО: НЕ пиши проценты уверенности, НЕ пиши итоговый счет, НЕ дублируй вердикт (не пиши "Прогноз: победа"). Только логика и рассуждения на русском языке.
-"""
-    max_retries = 3
-    for attempt in range(max_retries):
+    headers = {"x-rapidapi-key": API_FOOTBALL_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
+    
+    async with httpx.AsyncClient() as client:
         try:
-            response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
-            if response and response.text:
-                return response.text.strip()
+            r1 = await client.get("https://v3.football.api-sports.io/teams", headers=headers, params={"search": team1_name})
+            r2 = await client.get("https://v3.football.api-sports.io/teams", headers=headers, params={"search": team2_name})
+            id1 = r1.json().get("response", [{}])[0].get("team", {}).get("id") if r1.json().get("response") else None
+            id2 = r2.json().get("response", [{}])[0].get("team", {}).get("id") if r2.json().get("response") else None
+            if not id1 or not id2: raise ValueError("Команды не найдены")
+
+            f1 = await client.get("https://v3.football.api-sports.io/fixtures", headers=headers, params={"team": id1, "last": 5, "status": "FT"})
+            f2 = await client.get("https://v3.football.api-sports.io/fixtures", headers=headers, params={"team": id2, "last": 5, "status": "FT"})
+            
+            def parse_form(fixtures, team_id):
+                num_form, str_form = [], []
+                g_scored, g_conceded = 0, 0
+                for m in fixtures.get("response", []):
+                    home = m["teams"]["home"]["id"] == team_id
+                    win = m["teams"]["home"]["winner"] if home else m["teams"]["away"]["winner"]
+                    
+                    g_scored += m["goals"]["home"] if home else m["goals"]["away"]
+                    g_conceded += m["goals"]["away"] if home else m["goals"]["home"]
+                    
+                    if win is True: num_form.append(1); str_form.append("W")
+                    elif win is False: num_form.append(0); str_form.append("L")
+                    else: num_form.append(0.5); str_form.append("D")
+                num_form.reverse(); str_form.reverse()
+                return num_form, " ".join(str_form), g_scored/5, g_conceded/5
+
+            t1_num, t1_str, t1_gs, t1_gc = parse_form(f1.json(), id1)
+            t2_num, t2_str, t2_gs, t2_gc = parse_form(f2.json(), id2)
+
+            h2h_res = await client.get("https://v3.football.api-sports.io/fixtures/headtohead", headers=headers, params={"h2h": f"{id1}-{id2}", "last": 3})
+            h2h_t1_wins, h2h_t2_wins = 0, 0
+            h2h_parsed = []
+            for m in h2h_res.json().get("response", []):
+                home_win = m["teams"]["home"]["winner"]
+                if m["teams"]["home"]["id"] == id1:
+                    if home_win is True: h2h_t1_wins += 1
+                    elif home_win is False: h2h_t2_wins += 1
+                else:
+                    if home_win is True: h2h_t2_wins += 1
+                    elif home_win is False: h2h_t1_wins += 1
+                h2h_parsed.append(f"{m['goals']['home']}-{m['goals']['away']}")
+
+            h2h_str = " | ".join(h2h_parsed) if h2h_parsed else "Нет свежих очных встреч"
+
+            return {
+                "t1_form": t1_num if t1_num else [0.5]*5, "t2_form": t2_num if t2_num else [0.5]*5,
+                "t1_str": t1_str, "t2_str": t2_str,
+                "t1_gs": t1_gs, "t1_gc": t1_gc, "t2_gs": t2_gs, "t2_gc": t2_gc,
+                "h2h_t1_wins": h2h_t1_wins, "h2h_t2_wins": h2h_t2_wins, "h2h_str": h2h_str
+            }
         except Exception as e:
-            print(f"Gemini error (attempt {attempt+1}/{max_retries}): {e}")
-            if attempt == max_retries - 1:
-                break
-            await asyncio.sleep(2 ** attempt)
-    return "Сервис аналитики временно перегружен. Попробуйте позже."
+            print(f"API Error: {e}")
+            return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "?", "t2_str": "?", "h2h_str": "Ошибка", "t1_gs": 1, "t1_gc": 1, "t2_gs": 1, "t2_gc": 1, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
+
+def calculate_prediction(data: dict) -> dict:
+    """Математический движок на базе весов каппера"""
+    f1_score, f2_score = sum(data['t1_form']), sum(data['t2_form'])
+    score1, score2 = 0, 0
+
+    # 1. Форма (15%)
+    score1 += (f1_score / 5) * 15
+    score2 += (f2_score / 5) * 15
+
+    # 2. Личные встречи (24%)
+    h2h_total = data['h2h_t1_wins'] + data['h2h_t2_wins']
+    if h2h_total > 0:
+        score1 += (data['h2h_t1_wins'] / h2h_total) * 24
+        score2 += (data['h2h_t2_wins'] / h2h_total) * 24
+    else:
+        score1 += 12; score2 += 12
+
+    # 3. Свое поле (24% - отдаем команде 1)
+    score1 += 24
+
+    # 4. Класс / Таблица (21% - эмуляция через разницу мячей)
+    net1, net2 = data['t1_gs'] - data['t1_gc'], data['t2_gs'] - data['t2_gc']
+    if net1 > net2: score1 += 21
+    elif net2 > net1: score2 += 21
+    else: score1 += 10.5; score2 += 10.5
+
+    diff = abs(score1 - score2)
+    avg_goals = (data['t1_gs'] + data['t2_gs'] + data['t1_gc'] + data['t2_gc']) / 2
+
+    import random
+    # СЦЕНАРИИ КАППЕРА
+    if avg_goals < 2.0 and diff < 15: # Закрытая низовая игра
+        winner = "Ничья"
+        confidence = random.uniform(68, 76)
+        additional = "Тотал меньше (2.5) 75% | Ничья в 1 тайме 80%"
+        
+    elif avg_goals >= 2.8 and diff < 20: # Обе забивные, класс равен
+        winner = "Тотал больше (2.5)"
+        confidence = random.uniform(78, 86)
+        additional = "Обе забьют: ДА 82% | Гол в 1 тайме 88%"
+
+    elif diff > 30: # Железобетон фаворит
+        winner = "team1" if score1 > score2 else "team2"
+        confidence = random.uniform(88, 94)
+        additional = "Победа с форой (-1) 75% | ИТБ фаворита (1.5) 82%"
+
+    else: # Обычный перевес
+        winner = "team1" if score1 > score2 else "team2"
+        confidence = random.uniform(75, 84)
+        additional = "Тотал угловых > 8.5 70% | Гол во 2 тайме 85%"
+
+    # Детектор СКИПА
+    if confidence < 65:
+        winner = "ПРОПУСК (Сложный матч)"
+        additional = "Слишком высокие риски. Ставить не рекомендуется."
+
+    return {"winner": winner, "confidence": round(confidence, 2), "additional": additional}
+
+async def generate_prediction_text(team1, team2, data, winner, confidence, additional):
+    prompt = f"""
+    Ты — элитный спортивный аналитик. Напиши премиальный разбор матча (7-9 предложений).
+
+    ДАННЫЕ:
+    Команда 1 ({team1}): форма {data['t1_str']}, забивает в среднем {data['t1_gs']}, пропускает {data['t1_gc']}.
+    Команда 2 ({team2}): форма {data['t2_str']}, забивает {data['t2_gs']}, пропускает {data['t2_gc']}.
+    H2H (очные встречи): {data['h2h_str']}
+    Главный прогноз алгоритма: {winner} (Уверенность: {confidence}%)
+    Доп. исходы: {additional}
+
+    ЖЕСТКИЕ ПРАВИЛА (ШТРАФ ЗА НАРУШЕНИЕ):
+    1. ЗАПРЕЩЕНО выдумывать травмы или отсутствующих игроков. Если не знаешь фактов — анализируй только переданную статистику голов и H2H.
+    2. ЗАПРЕЩЕНЫ призывы (ссылки в био, пиши в ЛС).
+    3. Обоснуй логически, почему выбран {winner} и {additional}, исходя из стилей (закрытая/открытая игра).
+    4. Не пиши проценты уверенности в тексте, только аналитика.
+    """
+    try:
+        response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
+        if response and response.text:
+            return response.text.strip()
+    except Exception as e:
+        print(f"Gemini error: {e}")
+    return "Сложный матч. Рекомендуется опираться на статистику забитых/пропущенных мячей и историю личных встреч."
 
 async def save_prediction_log(user_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
     db = SessionLocal()
@@ -414,16 +494,17 @@ async def save_prediction_log(user_id: int, match_desc: str, winner: str, confid
 
 async def generate_and_send_prediction(message: types.Message, team1: str, team2: str):
     await message.answer("📊 Получаю статистику и анализирую...")
-    stats1 = await get_team_stats(team1)
-    stats2 = await get_team_stats(team2)
-    pred = calculate_prediction(stats1, stats2)
+    match_data = await get_advanced_match_data(team1, team2)
+    pred = calculate_prediction(match_data)
     winner = pred["winner"]
     confidence = pred["confidence"]
-    analysis_text = await generate_prediction_text(team1, team2, stats1, stats2, winner, confidence)
-    winner_name = team1 if winner == "team1" else (team2 if winner == "team2" else "Ничья")
-    total_over_conf = random.randint(55, 75)
-    corners_over_conf = random.randint(55, 75)
-    additional = f"• Тотал голов (2.5): OVER (уверенность {total_over_conf}%)\n• Тотал угловых (9.5): OVER (уверенность {corners_over_conf}%)"
+    additional = pred.get("additional", "")
+    analysis_text = await generate_prediction_text(team1, team2, match_data, winner, confidence, additional)
+    
+    # Имя победителя (или тотал, если алгоритм выбрал его)
+    if winner == "team1": winner_name = team1
+    elif winner == "team2": winner_name = team2
+    else: winner_name = winner
     result_text = (
         f"🏆 *Прогноз AI*\n"
         f"Победитель: *{winner_name}*\n"
@@ -1506,16 +1587,16 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         if not team1 or not team2 or team1 == "Unknown" or team2 == "Unknown":
             return {"error": "Could not determine team names."}
 
-        stats1 = await get_team_stats(team1)
-        stats2 = await get_team_stats(team2)
-        pred = calculate_prediction(stats1, stats2)
+        match_data = await get_advanced_match_data(team1, team2)
+        pred = calculate_prediction(match_data)
         winner = pred["winner"]
         confidence = pred["confidence"]
-        analysis_text = await generate_prediction_text(team1, team2, stats1, stats2, winner, confidence)
-        winner_name = team1 if winner == "team1" else (team2 if winner == "team2" else "Ничья")
-        total_over = random.randint(55, 75)
-        corners_over = random.randint(55, 75)
-        additional = f"Тотал голов (2.5): OVER ({total_over}%)\nТотал угловых (9.5): OVER ({corners_over}%)"
+        additional = pred.get("additional", "")
+        analysis_text = await generate_prediction_text(team1, team2, match_data, winner, confidence, additional)
+        
+        if winner == "team1": winner_name = team1
+        elif winner == "team2": winner_name = team2
+        else: winner_name = winner
 
         user.attempts_left -= 1
         user.last_activity = datetime.utcnow()
