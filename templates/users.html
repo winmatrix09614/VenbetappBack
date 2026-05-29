@@ -252,32 +252,81 @@
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content border-0 shadow">
       <div class="modal-header bg-warning text-dark border-0">
-        <h5 class="modal-title fw-bold"><i class="bi bi-megaphone-fill me-2"></i> Создание рассылки</h5>
+        <h5 class="modal-title fw-bold"><i class="bi bi-megaphone-fill me-2"></i> Создание PRO-рассылки</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-4 bg-body-inner">
-        
-        <div class="mb-3">
-            <label class="form-label fw-bold small text-muted text-uppercase">Кому отправляем?</label>
-            <select id="broadcastSegment" class="form-select">
-                <option value="dead_souls">👻 Мертвые души (Активированы, но не заходили > 3 дней)</option>
-                <option value="active">✅ Только активные пользователи</option>
-                <option value="pending">⏳ Ожидающие активации (Прогрев)</option>
-                <option value="all">🌍 Все пользователи в базе (Осторожно!)</option>
-            </select>
+
+        <h6 class="fw-bold mb-3 text-body"><i class="bi bi-funnel text-primary"></i> 1. Фильтры аудитории</h6>
+        <div class="row g-2 mb-4">
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1 fw-bold">Гео (Страна)</label>
+                <select class="form-select form-select-sm text-muted"><option>Любое Гео (В разработке)</option></select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1 fw-bold">Источник (UTM)</label>
+                <select class="form-select form-select-sm text-muted"><option>Любой источник (В разработке)</option></select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1 fw-bold">Статус / Баланс</label>
+                <select class="form-select form-select-sm" id="broadcastSegment">
+                    <option value="dead_souls">👻 Мертвые души (> 3 дней неактивны)</option>
+                    <option value="active">✅ Активные пользователи</option>
+                    <option value="pending">⏳ Ожидающие активации</option>
+                    <option value="zero_limits">❌ Баланс 0 (Закончились лимиты)</option>
+                    <option value="all">🌍 Все пользователи базы</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1 fw-bold">Дата регистрации</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light">От</span><input type="date" class="form-control text-muted">
+                    <span class="input-group-text bg-light">До</span><input type="date" class="form-control text-muted">
+                </div>
+            </div>
         </div>
 
-        <div class="mb-3">
-            <label class="form-label fw-bold small text-muted text-uppercase d-flex justify-content-between">
-                Текст сообщения (поддерживает HTML)
-                <a href="https://core.telegram.org/bots/api#html-style" target="_blank" class="text-decoration-none small"><i class="bi bi-info-circle"></i> Справка по тегам</a>
+        <h6 class="fw-bold mb-3 text-body"><i class="bi bi-chat-left-text text-primary"></i> 2. Контент сообщения</h6>
+        <div class="mb-4">
+            <label class="btn btn-sm btn-outline-secondary w-100 mb-2 d-flex align-items-center justify-content-center" style="border-style: dashed; cursor: pointer;">
+                <i class="bi bi-image me-2"></i> Прикрепить изображение (Опционально)
+                <input type="file" hidden accept="image/*" id="pushImage">
             </label>
-            <textarea id="broadcastText" class="form-control" rows="6" placeholder="Например: <b>Привет!</b> Держи бонус..."></textarea>
-            <div class="form-text mt-2">Используйте <code>&lt;b&gt;текст&lt;/b&gt;</code> для жирного, <code>&lt;i&gt;текст&lt;/i&gt;</code> для курсива, <code>&lt;a href="URL"&gt;текст&lt;/a&gt;</code> для ссылок.</div>
+
+            <div class="border rounded-top p-2 bg-body-tertiary d-flex gap-1 border-bottom-0">
+                <button class="btn btn-sm btn-light border shadow-sm" onclick="insertFormat('<b>', '</b>')" title="Жирный"><i class="bi bi-type-bold"></i></button>
+                <button class="btn btn-sm btn-light border shadow-sm" onclick="insertFormat('<i>', '</i>')" title="Курсив"><i class="bi bi-type-italic"></i></button>
+                <button class="btn btn-sm btn-light border shadow-sm" onclick="insertFormat('<a href=\'URL\'>', '</a>')" title="Ссылка"><i class="bi bi-link-45deg"></i></button>
+                <span class="ms-auto text-muted small align-self-center" style="font-size: 11px;">Можно использовать макросы: {user_id}, {attempts}</span>
+            </div>
+            <textarea id="broadcastText" class="form-control rounded-0 rounded-bottom border" rows="5" placeholder="Например: Привет, {user_id}! Держи инсайдерскую инфу..."></textarea>
         </div>
 
-        <button class="btn btn-warning w-100 fw-bold shadow-sm" onclick="sendBroadcast()" id="btnSendBroadcast">
-            <i class="bi bi-send-fill"></i> Запустить рассылку
+        <h6 class="fw-bold mb-3 text-body"><i class="bi bi-clock-history text-primary"></i> 3. Время отправки</h6>
+        <div class="mb-4 bg-body-tertiary p-3 rounded border">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="sendTime" id="sendNow" value="now" checked onchange="toggleSchedule(false)">
+                <label class="form-check-label fw-bold" for="sendNow">Отправить прямо сейчас</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="sendTime" id="sendLater" value="later" onchange="toggleSchedule(true)">
+                <label class="form-check-label fw-bold" for="sendLater">Запланировать отправку</label>
+            </div>
+            
+            <div id="scheduleOptions" class="mt-3 d-none">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <input type="datetime-local" class="form-control form-control-sm" id="scheduleDate">
+                    </div>
+                    <div class="col-md-7 text-muted" style="font-size: 11px;">
+                        <i class="bi bi-info-circle text-primary"></i> Время указано по вашему локальному часовому поясу
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-warning w-100 fw-bold shadow-sm py-2 fs-5" onclick="sendBroadcast()" id="btnSendBroadcast">
+            <i class="bi bi-send-fill me-2"></i> Запустить рассылку
         </button>
       </div>
     </div>
@@ -285,17 +334,47 @@
 </div>
 
 <script>
+    // Функция для умной вставки тегов (жирный, курсив)
+    function insertFormat(startTag, endTag) {
+        const textarea = document.getElementById('broadcastText');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const before = text.substring(0, start);
+        const selected = text.substring(start, end);
+        const after = text.substring(end, text.length);
+
+        textarea.value = before + startTag + selected + endTag + after;
+        textarea.focus();
+        
+        // Ставим курсор между тегами, если текст не был выделен
+        if (selected.length === 0) {
+            textarea.selectionStart = textarea.selectionEnd = start + startTag.length;
+        } else {
+            textarea.selectionStart = textarea.selectionEnd = start + startTag.length + selected.length + endTag.length;
+        }
+    }
+
+    // Показать/Скрыть календарь отложенной отправки
+    function toggleSchedule(show) {
+        const panel = document.getElementById('scheduleOptions');
+        if (show) panel.classList.remove('d-none');
+        else panel.classList.add('d-none');
+    }
+
+    // Отправка (пока обрабатывает только сегмент и текст на готовый бэкенд)
     function sendBroadcast() {
         const segment = document.getElementById('broadcastSegment').value;
         const text = document.getElementById('broadcastText').value.trim();
         const btn = document.getElementById('btnSendBroadcast');
         
         if (!text) return alert("Введите текст сообщения!");
-        if (!confirm("Вы уверены, что хотите запустить рассылку? Это действие нельзя отменить.")) return;
+        if (!confirm("Запустить рассылку?")) return;
         
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Запуск...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Обработка...';
         
+        // В будущем сюда добавится сбор данных о картинке (FormData) и времени (scheduleDate)
         fetch('/api/broadcast', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -304,7 +383,7 @@
         .then(res => res.json())
         .then(data => {
             if(data.status === 'ok') {
-                alert("Рассылка успешно запущена в фоновом режиме!");
+                alert("Рассылка успешно запущена!");
                 bootstrap.Modal.getInstance(document.getElementById('broadcastModal')).hide();
                 document.getElementById('broadcastText').value = '';
             } else {
@@ -314,7 +393,7 @@
         .catch(e => alert("Ошибка сети"))
         .finally(() => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-send-fill"></i> Запустить рассылку';
+            btn.innerHTML = '<i class="bi bi-send-fill me-2"></i> Запустить рассылку';
         });
     }
 </script>
