@@ -27,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
 # ---- База данных (SQLAlchemy) ----
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, Text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from sqlalchemy.orm import joinedload
 
