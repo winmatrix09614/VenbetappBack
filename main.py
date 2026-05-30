@@ -115,6 +115,24 @@ class User(Base):
     country = Column(String, nullable=True)
     os_device = Column(String, nullable=True)
     browser = Column(String, nullable=True)
+    
+    # --- Поля для арбитража (Этап 4) ---
+    click_id = Column(String, nullable=True, index=True) # ID клика из рекламной сети
+    cost_per_lead = Column(Float, default=0.0) # Цена за лида (CPA)
+    is_blocked_bot = Column(Boolean, default=False) # Флаг отвала (заблокировал бота)
+
+class TrafficEvent(Base):
+    """Таблица-журнал для всех микро-конверсий"""
+    __tablename__ = "traffic_events"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    telegram_id = Column(BigInteger, nullable=True)
+    event_type = Column(String, nullable=False) # 'bot_start', 'lead_registered', 'approved', 'prediction'
+    source = Column(String, nullable=True)
+    click_id = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
 
 class PredictionLog(Base):
     __tablename__ = "prediction_logs"
@@ -167,19 +185,37 @@ class BroadcastLog(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- АВТО-МИГРАЦИЯ ДЛЯ POSTGRESQL (Этап 3) ---
-# Добавляем новые колонки в существующую таблицу без потери данных
+# --- АВТО-МИГРАЦИЯ ДЛЯ POSTGRESQL (Этап 3 и 4) ---
+from sqlalchemy.sql import text
+
 try:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_address VARCHAR;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS os_device VARCHAR;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS browser VARCHAR;"))
-        print("✅ Миграция базы данных успешно выполнена (колонки проверены/добавлены)!")
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS click_id VARCHAR;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cost_per_lead FLOAT DEFAULT 0.0;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked_bot BOOLEAN DEFAULT FALSE;"))
+        print("✅ Миграция базы данных успешно выполнена (новые арбитражные колонки добавлены)!")
 except Exception as e:
     print(f"⚠️ Миграция пропущена: {e}")
 # ---------------------------------------------
 
+def log_traffic_event(db: Session, event_type: str, user_id: int = None, telegram_id: int = None, source: str = None, click_id: str = None):
+    """Глобальный счетчик событий для воронок"""
+    try:
+        event = TrafficEvent(
+            user_id=user_id,
+            telegram_id=telegram_id,
+            event_type=event_type,
+            source=source,
+            click_id=click_id
+        )
+        db.add(event)
+        db.commit()
+    except Exception as e:
+        print(f"[EVENT ERROR] {e}")
 # Создаём администратора по умолчанию, если нет ни одного сотрудника
 with SessionLocal() as db:
     if not db.query(Staff).first():
@@ -1550,6 +1586,7 @@ async def register_request(
     bet_id: str, 
     init_data: str = Query(None), 
     source: str = Query(None), 
+    click_id: str = Query(None), # <-- Ловим Click ID от баеров
     db: Session = Depends(get_db)
 ):
     try:
@@ -1633,11 +1670,12 @@ async def register_request(
         new_user = User(
             telegram_id=telegram_id,
             bet_id=clean_bet_id,
-            username=username, # Не забываем записать юзернейм
+            username=username,
             attempts_left=0,
             is_active=False,
             is_banned=False,
             source=source,
+            click_id=click_id, # Сохраняем метку
             ip_address=ip_address,
             country=country,
             os_device=os_device,
@@ -1645,6 +1683,9 @@ async def register_request(
         )
         db.add(new_user)
         db.commit()
+        
+        # Логируем событие "Лид зарегистрирован"
+        log_traffic_event(db, event_type="lead_registered", user_id=new_user.id, telegram_id=telegram_id, source=source, click_id=click_id)
         
         pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
         await notifier.push({"count": pending_count})
@@ -1724,8 +1765,13 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         user.attempts_left -= 1
         user.last_activity = datetime.utcnow()
         db.commit()
+        
+        # Логируем событие "Сделан прогноз" для когортного анализа
+        log_traffic_event(db, event_type="prediction", user_id=user.id, telegram_id=user.telegram_id, source=user.source, click_id=user.click_id)
+
         full_text = f"Победитель: {winner_name}\nУверенность: {confidence}%\n{analysis_text}"
         await save_prediction_log(user.id, f"{team1} - {team2}", winner, confidence, full_text, additional)
+        
         return {
             "prediction": {"winner": winner_name, "confidence": confidence},
             "additional": additional,
