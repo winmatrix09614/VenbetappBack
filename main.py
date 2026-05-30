@@ -53,6 +53,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.exceptions import TelegramForbiddenError
 
 # ---- Pydantic для валидации ----
 from pydantic import BaseModel
@@ -1145,7 +1146,11 @@ async def approve_user(
         if user.telegram_id:
             try:
                 await bot.send_message(user.telegram_id, f"✅ Ваш аккаунт активирован! У вас {attempts} прогнозов.")
-            except:
+            except TelegramForbiddenError:
+                user.is_blocked_bot = True
+                user.is_active = False
+                db.commit()
+            except Exception:
                 pass
     return RedirectResponse(url="/dashboard", status_code=303)
 
@@ -1285,14 +1290,21 @@ async def run_broadcast_task(segment: str, text: str, staff_id: int):
         
         for u in users_to_send:
             try:
-                # Отправляем сообщение, поддерживаем HTML-разметку (жирный текст, ссылки)
+                # Отправляем сообщение, поддерживаем HTML-разметку
                 await bot.send_message(u.telegram_id, text, parse_mode="HTML")
                 success_count += 1
                 # Обязательная пауза! Telegram разрешает ~30 сообщений в секунду.
                 await asyncio.sleep(0.05) 
+            except TelegramForbiddenError:
+                # Отлавливаем блокировку и очищаем базу от мусора
+                u.is_blocked_bot = True
+                u.is_active = False
+                print(f"[BLOCK] Юзер {u.telegram_id} заблокировал бота.")
             except Exception as e:
                 print(f"[BROADCAST ERROR] User {u.id}: {e}")
                 
+        db.commit() # Сохраняем свежие статусы блокировок в базу
+        
         # Сохраняем детальный лог в новую таблицу
         broadcast_record = BroadcastLog(
             staff_id=staff_id,
