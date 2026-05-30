@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Когортный Анализ | Трекер</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-panel: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --accent: #3b82f6;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-right: 15px;
+            font-weight: 500;
+        }
+        .nav-links a:hover { color: var(--text-main); }
+        .table-container {
+            background-color: var(--bg-panel);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center;
+        }
+        th, td {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+        }
+        th {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background-color: rgba(0,0,0,0.2);
+            font-weight: 600;
+        }
+        td { font-size: 14px; font-weight: 500; }
+        .date-col { text-align: left; font-weight: 600; color: var(--accent); }
+        .total-col { font-weight: bold; background-color: rgba(255,255,255,0.02); }
+        
+        /* Цвета для Heatmap */
+        .heat-cell { color: #fff; text-shadow: 0px 1px 2px rgba(0,0,0,0.5); }
+        .info-box { background-color: var(--bg-panel); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: var(--text-muted); border-left: 4px solid var(--accent); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>🔥 Retention Heatmap (Когорты)</h2>
+        <div class="nav-links">
+            <a href="/dashboard">← Вернуться в Дашборд</a>
+            <a href="/admin/analytics/traffic">Воронка трафика</a>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <strong>Что показывает эта таблица?</strong><br>
+        Когортный анализ Product Retention. Каждая строка — это группа лидов, зарегистрировавшихся в один день. 
+        Проценты показывают, какая доля этой группы сгенерировала хотя бы 1 прогноз (воспользовалась ИИ) на 0-й, 1-й, 2-й и т.д. день после регистрации. 
+        <i>Чем зеленее ячейка, тем лучше возвращаемость (LTV).</i>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align: left;">Когорта (Дата)</th>
+                    <th>Всего юзеров</th>
+                    <th>Day 0</th>
+                    <th>Day 1</th>
+                    <th>Day 2</th>
+                    <th>Day 3</th>
+                    <th>Day 7</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in cohorts %}
+                <tr>
+                    <td class="date-col">{{ row.date }}</td>
+                    <td class="total-col">{{ row.total }}</td>
+                    
+                    <td class="heat-cell" style="background-color: rgba(16, 185, 129, {{ row.d0 / 100 }});">
+                        {{ row.d0 }}%
+                    </td>
+                    <td class="heat-cell" style="background-color: rgba(16, 185, 129, {{ row.d1 / 100 }});">
+                        {{ row.d1 }}%
+                    </td>
+                    <td class="heat-cell" style="background-color: rgba(16, 185, 129, {{ row.d2 / 100 }});">
+                        {{ row.d2 }}%
+                    </td>
+                    <td class="heat-cell" style="background-color: rgba(16, 185, 129, {{ row.d3 / 100 }});">
+                        {{ row.d3 }}%
+                    </td>
+                    <td class="heat-cell" style="background-color: rgba(16, 185, 129, {{ row.d7 / 100 }});">
+                        {{ row.d7 }}%
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="color: var(--text-muted); padding: 30px;">Недостаточно данных для формирования когорт</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</body>
+</html>

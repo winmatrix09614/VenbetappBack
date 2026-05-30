@@ -1185,6 +1185,80 @@ async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)
         "staff_role": staff.role
     })
 
+    # ---------- Когортный Анализ (Product Retention) ----------
+@app.get("/admin/analytics/cohorts", response_class=HTMLResponse)
+async def cohorts_page(request: Request, db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff:
+        return RedirectResponse(url="/admin/login")
+
+    # Берем последние 14 дней для анализа
+    start_date = datetime.utcnow() - timedelta(days=14)
+    start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 1. Формируем когорты (группируем юзеров по дате регистрации)
+    users = db.query(User.id, User.created_at).filter(User.created_at >= start_date).all()
+    
+    cohorts = {}
+    user_reg_dates = {}
+    for u in users:
+        d_str = u.created_at.strftime('%Y-%m-%d')
+        if d_str not in cohorts:
+            cohorts[d_str] = {"total": 0, "users": set(), "retention": {0:0, 1:0, 2:0, 3:0, 7:0}}
+        cohorts[d_str]["total"] += 1
+        cohorts[d_str]["users"].add(u.id)
+        # Запоминаем дату реги для каждого, отбрасывая часы/минуты
+        user_reg_dates[u.id] = u.created_at.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 2. Достаем историю генерации прогнозов
+    user_ids = list(user_reg_dates.keys())
+    if user_ids:
+        events = db.query(TrafficEvent.user_id, TrafficEvent.timestamp).filter(
+            TrafficEvent.user_id.in_(user_ids),
+            TrafficEvent.event_type == 'prediction'
+        ).all()
+
+        user_active_days = {}
+        for ev in events:
+            uid = ev.user_id
+            if uid not in user_active_days:
+                user_active_days[uid] = set()
+                
+            ev_d = ev.timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+            delta_days = (ev_d - user_reg_dates[uid]).days
+            
+            if delta_days >= 0:
+                user_active_days[uid].add(delta_days)
+
+        # 3. Вычисляем Retention (возвраты по дням)
+        for cohort_date, data in cohorts.items():
+            for uid in data["users"]:
+                if uid in user_active_days:
+                    days_active = user_active_days[uid]
+                    for d in [0, 1, 2, 3, 7]:
+                        if d in days_active:
+                            data["retention"][d] += 1
+
+    # Форматируем данные для отправки в HTML
+    result_cohorts = []
+    for d in sorted(cohorts.keys(), reverse=True):
+        total = cohorts[d]["total"]
+        result_cohorts.append({
+            "date": d,
+            "total": total,
+            "d0": round(cohorts[d]["retention"][0] / total * 100) if total > 0 else 0,
+            "d1": round(cohorts[d]["retention"][1] / total * 100) if total > 0 else 0,
+            "d2": round(cohorts[d]["retention"][2] / total * 100) if total > 0 else 0,
+            "d3": round(cohorts[d]["retention"][3] / total * 100) if total > 0 else 0,
+            "d7": round(cohorts[d]["retention"][7] / total * 100) if total > 0 else 0,
+        })
+
+    return templates.TemplateResponse("cohorts.html", {
+        "request": request,
+        "cohorts": result_cohorts,
+        "staff_role": staff.role
+    })
+
 # ---------- Управление пользователями (approve, ban, premium) ----------
 @app.post("/approve")
 async def approve_user(
