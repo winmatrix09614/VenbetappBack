@@ -387,6 +387,83 @@ async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
             print(f"API Error: {e}")
             return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "?", "t2_str": "?", "h2h_str": "Ошибка", "t1_gs": 1, "t1_gc": 1, "t2_gs": 1, "t2_gc": 1, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
 
+async def translate_team_name(team_name: str) -> str:
+    """Умный переводчик названий команд для точного поиска в API-Football"""
+    try:
+        prompt = f"Переведи название футбольной команды '{team_name}' на английский язык для поиска в базе данных. Если это аббревиатура (как ПСЖ), напиши стандартное английское название (Paris Saint Germain). В ответе выдай ТОЛЬКО название команды, без кавычек, точек и лишних слов."
+        response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
+        if response and response.text:
+            return response.text.strip()
+    except Exception as e:
+        print(f"Translation error: {e}")
+    return team_name
+
+async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
+    """Сбор глубоких данных: Форма, H2H, Забитые/Пропущенные голы"""
+    if not API_FOOTBALL_KEY:
+        return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "W W D L W", "t2_str": "L D L W D", "h2h_str": "Нет данных", "t1_gs": 1.5, "t1_gc": 1.0, "t2_gs": 1.2, "t2_gc": 1.5, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
+
+    # Переводим названия команд на английский перед запросом к базе
+    eng_team1 = await translate_team_name(team1_name)
+    eng_team2 = await translate_team_name(team2_name)
+
+    headers = {"x-rapidapi-key": API_FOOTBALL_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
+    
+    async with httpx.AsyncClient() as http_client:
+        try:
+            r1 = await http_client.get("https://v3.football.api-sports.io/teams", headers=headers, params={"search": eng_team1})
+            r2 = await http_client.get("https://v3.football.api-sports.io/teams", headers=headers, params={"search": eng_team2})
+            id1 = r1.json().get("response", [{}])[0].get("team", {}).get("id") if r1.json().get("response") else None
+            id2 = r2.json().get("response", [{}])[0].get("team", {}).get("id") if r2.json().get("response") else None
+            if not id1 or not id2: raise ValueError("Команды не найдены")
+
+            f1 = await http_client.get("https://v3.football.api-sports.io/fixtures", headers=headers, params={"team": id1, "last": 5, "status": "FT"})
+            f2 = await http_client.get("https://v3.football.api-sports.io/fixtures", headers=headers, params={"team": id2, "last": 5, "status": "FT"})
+            
+            def parse_form(fixtures, team_id):
+                num_form, str_form = [], []
+                g_scored, g_conceded = 0, 0
+                for m in fixtures.get("response", []):
+                    home = m["teams"]["home"]["id"] == team_id
+                    win = m["teams"]["home"]["winner"] if home else m["teams"]["away"]["winner"]
+                    
+                    g_scored += m["goals"]["home"] if home else m["goals"]["away"]
+                    g_conceded += m["goals"]["away"] if home else m["goals"]["home"]
+                    
+                    if win is True: num_form.append(1); str_form.append("W")
+                    elif win is False: num_form.append(0); str_form.append("L")
+                    else: num_form.append(0.5); str_form.append("D")
+                num_form.reverse(); str_form.reverse()
+                return num_form, " ".join(str_form), g_scored/5, g_conceded/5
+
+            t1_num, t1_str, t1_gs, t1_gc = parse_form(f1.json(), id1)
+            t2_num, t2_str, t2_gs, t2_gc = parse_form(f2.json(), id2)
+
+            h2h_res = await http_client.get("https://v3.football.api-sports.io/fixtures/headtohead", headers=headers, params={"h2h": f"{id1}-{id2}", "last": 3})
+            h2h_t1_wins, h2h_t2_wins = 0, 0
+            h2h_parsed = []
+            for m in h2h_res.json().get("response", []):
+                home_win = m["teams"]["home"]["winner"]
+                if m["teams"]["home"]["id"] == id1:
+                    if home_win is True: h2h_t1_wins += 1
+                    elif home_win is False: h2h_t2_wins += 1
+                else:
+                    if home_win is True: h2h_t2_wins += 1
+                    elif home_win is False: h2h_t1_wins += 1
+                h2h_parsed.append(f"{m['goals']['home']}-{m['goals']['away']}")
+
+            h2h_str = " | ".join(h2h_parsed) if h2h_parsed else "Нет свежих очных встреч"
+
+            return {
+                "t1_form": t1_num if t1_num else [0.5]*5, "t2_form": t2_num if t2_num else [0.5]*5,
+                "t1_str": t1_str, "t2_str": t2_str,
+                "t1_gs": t1_gs, "t1_gc": t1_gc, "t2_gs": t2_gs, "t2_gc": t2_gc,
+                "h2h_t1_wins": h2h_t1_wins, "h2h_t2_wins": h2h_t2_wins, "h2h_str": h2h_str
+            }
+        except Exception as e:
+            print(f"API Error: {e}")
+            return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "?", "t2_str": "?", "h2h_str": "Ошибка", "t1_gs": 1, "t1_gc": 1, "t2_gs": 1, "t2_gc": 1, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
+
 def calculate_prediction(data: dict) -> dict:
     """Математический движок на базе весов каппера"""
     f1_score, f2_score = sum(data['t1_form']), sum(data['t2_form'])
@@ -447,20 +524,22 @@ def calculate_prediction(data: dict) -> dict:
 
 async def generate_prediction_text(team1, team2, data, winner, confidence, additional):
     prompt = f"""
-    Ты — элитный спортивный аналитик. Напиши премиальный разбор матча (7-9 предложений).
+    Ты — элитный спортивный аналитик и футбольный журналист. Напиши премиальный разбор матча (7-9 предложений).
 
-    ДАННЫЕ:
+    ДАННЫЕ ДЛЯ АНАЛИЗА:
+    Матч: {team1} против {team2}
     Команда 1 ({team1}): форма {data['t1_str']}, забивает в среднем {data['t1_gs']}, пропускает {data['t1_gc']}.
     Команда 2 ({team2}): форма {data['t2_str']}, забивает {data['t2_gs']}, пропускает {data['t2_gc']}.
     H2H (очные встречи): {data['h2h_str']}
-    Главный прогноз алгоритма: {winner} (Уверенность: {confidence}%)
+    Главный прогноз: {winner}
     Доп. исходы: {additional}
 
     ЖЕСТКИЕ ПРАВИЛА (ШТРАФ ЗА НАРУШЕНИЕ):
-    1. ЗАПРЕЩЕНО выдумывать травмы или отсутствующих игроков. Если не знаешь фактов — анализируй только переданную статистику голов и H2H.
+    1. ЗАПРЕЩЕНО выдумывать травмы или отсутствующих игроков. Анализируй только стилистику, голы и H2H.
     2. ЗАПРЕЩЕНЫ призывы (ссылки в био, пиши в ЛС).
-    3. Обоснуй логически, почему выбран {winner} и {additional}, исходя из стилей (закрытая/открытая игра).
+    3. Обоснуй логически, почему выбран {winner} и {additional}.
     4. Не пиши проценты уверенности в тексте, только аналитика.
+    5. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать слова "алгоритм", "нейросеть", "ИИ" или писать от лица машины. Пиши от первого лица множественного числа ("Мы проанализировали...", "Наш разбор показывает...") или безлично. Ты — живой эксперт.
     """
     try:
         response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
@@ -469,7 +548,7 @@ async def generate_prediction_text(team1, team2, data, winner, confidence, addit
     except Exception as e:
         print(f"Gemini error: {e}")
     return "Сложный матч. Рекомендуется опираться на статистику забитых/пропущенных мячей и историю личных встреч."
-
+    
 async def save_prediction_log(user_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
     db = SessionLocal()
     try:
