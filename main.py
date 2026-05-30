@@ -28,7 +28,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
 # ---- База данных (SQLAlchemy) ----
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, Text, func, case
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from sqlalchemy.orm import joinedload
 
@@ -1118,6 +1118,70 @@ async def buyer_leads_page(
         "source_filter": source or "",
         "distinct_countries": distinct_countries,
         "distinct_sources": distinct_sources,
+        "staff_role": staff.role
+    })
+
+    # ---------- Аналитика Трафика (Воронки) ----------
+@app.get("/admin/analytics/traffic", response_class=HTMLResponse)
+async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff:
+        return RedirectResponse(url="/admin/login")
+
+    # 1. Агрегация данных по источникам (UTM Source)
+    query = db.query(
+        User.source,
+        func.count(User.id).label('total_leads'),
+        func.sum(case((User.is_active == True, 1), else_=0)).label('approved'),
+        func.sum(case((User.is_blocked_bot == True, 1), else_=0)).label('blocked')
+    ).group_by(User.source).all()
+
+    analytics_data = []
+    for row in query:
+        source_name = row.source if row.source else "Органика / Без UTM"
+        total_leads = row.total_leads or 0
+        approved = row.approved or 0
+        blocked = row.blocked or 0
+        
+        # 2. Считаем юзеров, сделавших прогнозы (из TrafficEvent)
+        preds_query = db.query(
+            func.count(func.distinct(TrafficEvent.user_id)).label('active_users'),
+            func.count(TrafficEvent.id).label('total_preds')
+        ).filter(
+            TrafficEvent.source == row.source, 
+            TrafficEvent.event_type == 'prediction'
+        ).first()
+        
+        active_users = preds_query.active_users or 0
+        total_preds = preds_query.total_preds or 0
+
+        # 3. Вычисляем конверсии (Воронка)
+        lead2appr = round((approved / total_leads * 100), 2) if total_leads > 0 else 0
+        appr2act = round((active_users / approved * 100), 2) if approved > 0 else 0
+        block_rate = round((blocked / total_leads * 100), 2) if total_leads > 0 else 0
+        
+        # Среднее кол-во прогнозов на одного активного юзера
+        avg_preds = round((total_preds / active_users), 1) if active_users > 0 else 0
+
+        analytics_data.append({
+            "source": source_name,
+            "total_leads": total_leads,
+            "approved": approved,
+            "lead2appr": lead2appr,
+            "active_users": active_users,
+            "appr2act": appr2act,
+            "total_preds": total_preds,
+            "avg_preds": avg_preds,
+            "blocked": blocked,
+            "block_rate": block_rate
+        })
+
+    # Сортируем по количеству лидов (от большего к меньшему)
+    analytics_data.sort(key=lambda x: x['total_leads'], reverse=True)
+
+    return templates.TemplateResponse("traffic_analytics.html", {
+        "request": request,
+        "analytics": analytics_data,
         "staff_role": staff.role
     })
 
