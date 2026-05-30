@@ -591,7 +591,7 @@ async def generate_prediction_text(team1, team2, data, winner, confidence, addit
         except Exception as e:
             await asyncio.sleep(1.5)
             
-    return "Сложный матч. Рекомендуется опираться на статистику забитых и пропущенных мячей, а также историю лич
+    return "Сложный матч. Рекомендуется опираться на статистику забитых и пропущенных мячей, а также историю личных встреч."
 
 async def save_prediction_log(user_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
     db = SessionLocal()
