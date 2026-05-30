@@ -1,9 +1,15 @@
 <!DOCTYPE html>
-<html lang="ru" data-bs-theme="light"> 
+<html lang="ru"> 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Venbet CRM{% endblock %}</title>
+
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'dark'; // по умолчанию темная
+        document.documentElement.setAttribute('data-bs-theme', savedTheme);
+    </script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
@@ -37,17 +43,16 @@
     <div class="row">
         <div class="col-md-2 sidebar p-3 shadow-lg z-3">
             <h4 class="text-white fw-bold mb-4 text-center">🎯 Venbet<span class="text-primary">CRM</span></h4>
+            
             <div class="text-muted small fw-bold mb-2 mt-3 px-2 text-uppercase">Управление</div>
             <a href="/dashboard"><i class="bi bi-people me-2"></i> CRM (Таблица)</a>
             <a href="/logs"><i class="bi bi-clock-history me-2"></i> Логи AI</a>
             <a href="/broadcasts"><i class="bi bi-send-check me-2"></i> История рассылок</a>
             
-            
             <div class="text-muted small fw-bold mb-2 mt-4 px-2 text-uppercase">Арбитраж</div>
             <a href="/buyer/leads"><i class="bi bi-grid-fill me-2"></i> Панель Баера</a>
-            <a href="/admin/analytics/traffic" class="nav-link">Аналитика трафика</a>
-            <a href="/admin/analytics/cohorts" class="btn btn-primary shadow-sm fw-bold text-white me-2">
-    <i class="bi bi-grid-3x3-gap-fill"></i> Retention (Когорты)
+            <a href="/admin/analytics/traffic"><i class="bi bi-bar-chart-fill me-2"></i> Воронка трафика</a>
+            <a href="/admin/analytics/cohorts"><i class="bi bi-grid-3x3-gap-fill me-2"></i> Retention (Когорты)</a>
             
             <a href="/admin/logout" class="text-danger mt-auto border-top border-secondary pt-3"><i class="bi bi-box-arrow-left me-2"></i> Выйти</a>
         </div>
@@ -76,10 +81,8 @@
         document.documentElement.setAttribute('data-bs-theme', theme);
         localStorage.setItem('theme', theme);
         const checkbox = document.getElementById('themeSwitch');
-        if(theme === 'dark') {
-            checkbox.checked = true;
-        } else {
-            checkbox.checked = false;
+        if (checkbox) {
+            checkbox.checked = (theme === 'dark');
         }
     }
 
@@ -88,9 +91,14 @@
         setTheme(checkbox.checked ? 'dark' : 'light');
     }
 
-    // Применяем при загрузке
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    setTheme(savedTheme);
+    // Синхронизируем положение тумблера при загрузке DOM
+    document.addEventListener('DOMContentLoaded', () => {
+        const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+        const checkbox = document.getElementById('themeSwitch');
+        if (checkbox) {
+            checkbox.checked = (currentTheme === 'dark');
+        }
+    });
 </script>
 </body>
 </html>
