@@ -387,15 +387,26 @@ async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
             print(f"API Error: {e}")
             return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "?", "t2_str": "?", "h2h_str": "Ошибка", "t1_gs": 1, "t1_gc": 1, "t2_gs": 1, "t2_gc": 1, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
 
+# Кэш для переводов (чтобы не тратить лимиты Gemini на одни и те же команды)
+translation_cache = {}
+
 async def translate_team_name(team_name: str) -> str:
-    """Умный переводчик названий команд для точного поиска в API-Football"""
-    try:
-        prompt = f"Переведи название футбольной команды '{team_name}' на английский язык для поиска в базе данных. Если это аббревиатура (как ПСЖ), напиши стандартное английское название (Paris Saint Germain). В ответе выдай ТОЛЬКО название команды, без кавычек, точек и лишних слов."
-        response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
-        if response and response.text:
-            return response.text.strip()
-    except Exception as e:
-        print(f"Translation error: {e}")
+    """Умный переводчик с кэшированием и защитой от лимитов"""
+    if team_name in translation_cache:
+        return translation_cache[team_name]
+        
+    prompt = f"Переведи название футбольной команды '{team_name}' на английский язык для поиска в базе данных API-Football. Если это аббревиатура (как ПСЖ), напиши стандартное английское название (Paris Saint Germain). В ответе выдай ТОЛЬКО название команды, без кавычек и лишних слов."
+    
+    # Делаем 3 попытки с паузой, чтобы бесплатный Gemini не захлебнулся
+    for attempt in range(3):
+        try:
+            response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
+            if response and response.text:
+                result = response.text.strip()
+                translation_cache[team_name] = result
+                return result
+        except Exception as e:
+            await asyncio.sleep(1.5) # Пауза перед новой попыткой
     return team_name
 
 async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
@@ -465,7 +476,7 @@ async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
             return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "?", "t2_str": "?", "h2h_str": "Ошибка", "t1_gs": 1, "t1_gc": 1, "t2_gs": 1, "t2_gc": 1, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
 
 def calculate_prediction(data: dict) -> dict:
-    """Математический движок на базе весов каппера"""
+    """Математический движок на базе весов каппера с динамическим пулом доп. исходов"""
     f1_score, f2_score = sum(data['t1_form']), sum(data['t2_form'])
     score1, score2 = 0, 0
 
@@ -494,31 +505,60 @@ def calculate_prediction(data: dict) -> dict:
     avg_goals = (data['t1_gs'] + data['t2_gs'] + data['t1_gc'] + data['t2_gc']) / 2
 
     import random
-    # СЦЕНАРИИ КАППЕРА
-    if avg_goals < 2.0 and diff < 15: # Закрытая низовая игра
+    
+    # 5. Определение сценария и загрузка пула логичных исходов
+    if avg_goals < 2.0 and diff < 15:
         winner = "Ничья"
         confidence = random.uniform(68, 76)
-        additional = "Тотал меньше (2.5) 75% | Ничья в 1 тайме 80%"
+        pool = [
+            "Тотал меньше (2.5)", "Тотал меньше (1.5)", "Ничья в 1 тайме", 
+            "Обе забьют: НЕТ", "Гол во 2 тайме: НЕТ", "Тотал угловых < 9.5", "Желтые карточки > 3.5"
+        ]
         
-    elif avg_goals >= 2.8 and diff < 20: # Обе забивные, класс равен
+    elif avg_goals >= 2.8 and diff < 20:
         winner = "Тотал больше (2.5)"
         confidence = random.uniform(78, 86)
-        additional = "Обе забьют: ДА 82% | Гол в 1 тайме 88%"
+        pool = [
+            "Обе забьют: ДА", "Гол в 1 тайме", "Тотал больше (3.5)", 
+            "Тотал угловых > 9.5", "Гол в обоих таймах", "Удары в створ > 8.5"
+        ]
 
-    elif diff > 30: # Железобетон фаворит
+    elif diff > 30:
         winner = "team1" if score1 > score2 else "team2"
         confidence = random.uniform(88, 94)
-        additional = "Победа с форой (-1) 75% | ИТБ фаворита (1.5) 82%"
+        pool = [
+            "Победа с форой (-1)", "Победа с форой (-1.5)", "ИТБ фаворита (1.5)", 
+            "Гол фаворита в 1 тайме", "Фаворит забьет в обоих таймах", 
+            "Сухая победа фаворита", "Угловые фаворита > 5.5"
+        ]
 
-    else: # Обычный перевес
+    else:
         winner = "team1" if score1 > score2 else "team2"
         confidence = random.uniform(75, 84)
-        additional = "Тотал угловых > 8.5 70% | Гол во 2 тайме 85%"
+        pool = [
+            "Тотал угловых > 8.5", "Гол во 2 тайме", "Победа в 1 мяч или ничья", 
+            "Обе забьют: ДА", "ИТБ победителя (1.0)", "Желтые карточки > 4.5"
+        ]
 
-    # Детектор СКИПА
+    # 6. Детектор СКИПА и генерация строки дополнительных исходов
     if confidence < 65:
         winner = "ПРОПУСК (Сложный матч)"
         additional = "Слишком высокие риски. Ставить не рекомендуется."
+    else:
+        # Выбираем случайное количество исходов (от 2 до 5)
+        num_addons = random.randint(2, 5)
+        
+        # Защита: берем не больше элементов, чем есть в самом пуле
+        selected_addons = random.sample(pool, min(num_addons, len(pool)))
+        
+        # Присваиваем каждому выбранному исходу свой случайный процент (от 68% до 89%)
+        addon_strings = []
+        for addon in selected_addons:
+            addon_conf = random.randint(68, 89)
+            addon_strings.append(f"{addon} {addon_conf}%")
+        
+        # Склеиваем их через разделитель
+        additional = " | ".join(addon_strings)
 
     return {"winner": winner, "confidence": round(confidence, 2), "additional": additional}
 
@@ -534,21 +574,25 @@ async def generate_prediction_text(team1, team2, data, winner, confidence, addit
     Главный прогноз: {winner}
     Доп. исходы: {additional}
 
-    ЖЕСТКИЕ ПРАВИЛА (ШТРАФ ЗА НАРУШЕНИЕ):
+    ЖЕСТКИЕ ПРАВИЛА:
     1. ЗАПРЕЩЕНО выдумывать травмы или отсутствующих игроков. Анализируй только стилистику, голы и H2H.
     2. ЗАПРЕЩЕНЫ призывы (ссылки в био, пиши в ЛС).
     3. Обоснуй логически, почему выбран {winner} и {additional}.
     4. Не пиши проценты уверенности в тексте, только аналитика.
-    5. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать слова "алгоритм", "нейросеть", "ИИ" или писать от лица машины. Пиши от первого лица множественного числа ("Мы проанализировали...", "Наш разбор показывает...") или безлично. Ты — живой эксперт.
+    5. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать слова "алгоритм", "нейросеть", "ИИ" или писать от лица машины. Пиши от первого лица ("Мой анализ показывает...") или безлично. Ты — живой эксперт.
     """
-    try:
-        response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
-        if response and response.text:
-            return response.text.strip()
-    except Exception as e:
-        print(f"Gemini error: {e}")
-    return "Сложный матч. Рекомендуется опираться на статистику забитых/пропущенных мячей и историю личных встреч."
     
+    # Защита от лимитов: 3 попытки с паузами
+    for attempt in range(3):
+        try:
+            response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            await asyncio.sleep(1.5)
+            
+    return "Сложный матч. Рекомендуется опираться на статистику забитых и пропущенных мячей, а также историю лич
+
 async def save_prediction_log(user_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
     db = SessionLocal()
     try:
