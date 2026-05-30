@@ -26,6 +26,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Body
 
 # ---- База данных (SQLAlchemy) ----
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, Text, func, case
@@ -1121,6 +1122,33 @@ async def buyer_leads_page(
         "staff_role": staff.role
     })
 
+# ---------- Установка CPA для кампании ----------
+@app.post("/admin/analytics/set_cpa")
+async def set_campaign_cpa(
+    payload: dict = Body(...), 
+    db: Session = Depends(get_db), 
+    staff=Depends(get_current_staff)
+):
+    if not staff:
+        return {"status": "error", "message": "Unauthorized"}
+        
+    source = payload.get("source")
+    cpa = payload.get("cpa")
+    
+    try:
+        cpa_float = float(cpa)
+    except (ValueError, TypeError):
+        return {"status": "error", "message": "Неверный формат числа"}
+
+    # Обновляем CPA у всех юзеров с этим источником
+    if source == "Органика / Без UTM" or not source:
+        db.query(User).filter((User.source == None) | (User.source == "")).update({"cost_per_lead": cpa_float}, synchronize_session=False)
+    else:
+        db.query(User).filter(User.source == source).update({"cost_per_lead": cpa_float}, synchronize_session=False)
+        
+    db.commit()
+    return {"status": "ok"}
+
     # ---------- Аналитика Трафика (Воронки) ----------
 @app.get("/admin/analytics/traffic", response_class=HTMLResponse)
 async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)):
@@ -1133,7 +1161,8 @@ async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)
         User.source,
         func.count(User.id).label('total_leads'),
         func.sum(case((User.is_active == True, 1), else_=0)).label('approved'),
-        func.sum(case((User.is_blocked_bot == True, 1), else_=0)).label('blocked')
+        func.sum(case((User.is_blocked_bot == True, 1), else_=0)).label('blocked'),
+        func.max(User.cost_per_lead).label('cpa') # Берем CPA кампании
     ).group_by(User.source).all()
 
     analytics_data = []
@@ -1163,6 +1192,9 @@ async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)
         # Среднее кол-во прогнозов на одного активного юзера
         avg_preds = round((total_preds / active_users), 1) if active_users > 0 else 0
 
+        cpa_val = row.cpa or 0.0
+        spent = round(total_leads * cpa_val, 2)
+        
         analytics_data.append({
             "source": source_name,
             "total_leads": total_leads,
@@ -1173,7 +1205,9 @@ async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)
             "total_preds": total_preds,
             "avg_preds": avg_preds,
             "blocked": blocked,
-            "block_rate": block_rate
+            "block_rate": block_rate,
+            "cpa": cpa_val,     # <-- Новое
+            "spent": spent      # <-- Новое
         })
 
     # Сортируем по количеству лидов (от большего к меньшему)

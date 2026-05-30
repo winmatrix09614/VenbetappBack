@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container-fluid px-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">📊 Воронка трафика</h2>
+        <h2 class="mb-0">📊 Воронка трафика и Финансы</h2>
         <a href="/dashboard" class="btn btn-outline-secondary btn-sm">← Назад в CRM</a>
     </div>
 
@@ -15,14 +15,14 @@
                     <thead class="table-dark">
                         <tr>
                             <th class="ps-4">Campaign / Источник</th>
+                            <th>CPA ($)</th>
+                            <th>Spent (Расход)</th>
                             <th>Leads (ID)</th>
                             <th>Approved</th>
                             <th>Lead2Appr</th>
-                            <th>Active (Прогнозы)</th>
+                            <th>Active</th>
                             <th>Appr2Act</th>
-                            <th>Total Preds</th>
                             <th>Avg. Preds</th>
-                            <th>Blocked (Отвал)</th>
                             <th class="pe-4">Block Rate</th>
                         </tr>
                     </thead>
@@ -30,14 +30,22 @@
                         {% for row in analytics %}
                         <tr>
                             <td class="ps-4 fw-bold text-primary">{{ row.source }}</td>
+                            
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="fw-bold me-2" id="cpa-val-{{ loop.index }}">${{ row.cpa }}</span>
+                                    <button class="btn btn-sm btn-light border py-0 px-1 text-muted" onclick="editCpa('{{ row.source }}', {{ row.cpa }})" title="Изменить стоимость лида"><i class="bi bi-pencil" style="font-size: 10px;"></i></button>
+                                </div>
+                            </td>
+                            
+                            <td class="text-danger fw-bold">${{ row.spent }}</td>
+                            
                             <td>{{ row.total_leads }}</td>
                             <td>{{ row.approved }}</td>
                             <td class="{% if row.lead2appr > 50 %}text-success fw-bold{% else %}text-muted{% endif %}">{{ row.lead2appr }}%</td>
                             <td>{{ row.active_users }}</td>
                             <td class="{% if row.appr2act > 40 %}text-success fw-bold{% else %}text-muted{% endif %}">{{ row.appr2act }}%</td>
-                            <td>{{ row.total_preds }}</td>
                             <td class="text-warning fw-bold">{{ row.avg_preds }}</td>
-                            <td>{{ row.blocked }}</td>
                             <td class="pe-4 {% if row.block_rate > 20 %}text-danger fw-bold{% else %}text-muted{% endif %}">{{ row.block_rate }}%</td>
                         </tr>
                         {% else %}
@@ -51,4 +59,32 @@
         </div>
     </div>
 </div>
+
+<script>
+    function editCpa(source, currentCpa) {
+        let newCpa = prompt(`Укажите новую стоимость за лида (CPA) для кампании:\n${source}\n(Дробные числа через точку, например 1.5)`, currentCpa);
+        if (newCpa === null) return; 
+        
+        newCpa = newCpa.replace(',', '.');
+        if (isNaN(newCpa) || newCpa.trim() === '') {
+            alert('Пожалуйста, введите корректное число!');
+            return;
+        }
+
+        fetch('/admin/analytics/set_cpa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: source, cpa: parseFloat(newCpa) })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                location.reload();
+            } else {
+                alert('Ошибка: ' + data.message);
+            }
+        })
+        .catch(err => alert('Ошибка соединения с сервером'));
+    }
+</script>
 {% endblock %}
