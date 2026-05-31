@@ -83,7 +83,7 @@
                     <h6 class="mb-0 fw-bold"><i class="bi bi-funnel text-primary me-2"></i> Конверсия</h6>
                 </div>
                 <div class="card-body">
-                    <div class="alert p-3 mb-4 rounded-4" style="background-color: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.2);">
+                    <div class="alert p-3 mb-4 rounded-4" style="background-color: rgba(220, 53, 69, 0.05); border: 1px solid rgba(220, 53, 69, 0.2);">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="fw-bold mb-1 text-danger"><i class="bi bi-person-x-fill text-danger me-2"></i> Мертвые души</h6>
@@ -264,111 +264,109 @@
     </div>
 </div>
 
-<div id="stickyActionBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg rounded-pill px-4 py-3 d-flex align-items-center justify-content-between" style="background-color: rgba(20, 20, 20, 0.95); border: 1px solid var(--venbet-orange); backdrop-filter: blur(10px); width: auto; min-width: 450px; z-index: 1050; opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.3s ease; transform: translate(-50%, 20px);">
+<div id="stickyActionBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg rounded-pill px-4 py-3 d-flex align-items-center justify-content-between" style="background-color: rgba(20, 20, 20, 0.95); border: 1px solid var(--venbet-border); backdrop-filter: blur(10px); width: auto; min-width: 450px; z-index: 1050; opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.3s ease; transform: translate(-50%, 20px);">
     <div class="text-white fw-bold d-flex align-items-center">
         <div class="bg-primary text-black rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 32px; height: 32px; font-size: 14px;" id="selectedCountBadge">0</div>
-        <span>лидов выбрано</span>
+        <span>пользователей выбрано</span>
     </div>
     <div class="d-flex align-items-center ms-4">
         <button class="btn btn-sm btn-outline-secondary border-0 rounded-pill me-2 fw-bold text-muted" onclick="clearSelection()">Сбросить</button>
         <button class="btn btn-sm btn-primary rounded-pill fw-bold px-4 shadow-sm" onclick="openProBroadcast()">
-            <i class="bi bi-send-fill me-2"></i> PRO-Рассылка
+            Create mailing
         </button>
     </div>
 </div>
 
 <style>
-    .broadcast-offcanvas { background-color: var(--venbet-panel); color: var(--venbet-muted); border-left: 1px solid var(--venbet-border); width: 550px; }
-    .b-section-title { font-size: 11px; font-weight: 800; color: #fff; letter-spacing: 1px; margin-bottom: 15px; margin-top: 25px; border-bottom: 1px solid var(--venbet-border); padding-bottom: 8px; text-transform: uppercase; }
-    .toolbar-btn { background: #050505; border: 1px solid var(--venbet-border); color: #fff; border-radius: 6px; padding: 4px 10px; transition: 0.2s; }
-    .toolbar-btn:hover { background: var(--venbet-border); color: var(--venbet-orange); }
-    .macro-badge { cursor: pointer; background: #050505; border: 1px solid #333; padding: 3px 8px; border-radius: 4px; font-size: 11px; color: #a0a6b5; transition: 0.2s; }
-    .macro-badge:hover { border-color: var(--venbet-orange); color: #fff; }
-    .inline-btn-row { background: #000; border: 1px dashed #333; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+    .broadcast-offcanvas { background-color: var(--venbet-panel); border-left: 1px solid var(--venbet-border); width: 750px; }
+    .form-label-strict { font-size: 12px; font-weight: 600; color: #a0a6b5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .macro-link { cursor: pointer; color: var(--venbet-muted); font-size: 12px; transition: 0.2s; text-decoration: none; margin-right: 12px; }
+    .macro-link:hover { color: var(--venbet-orange); text-decoration: underline; }
+    .ai-link { cursor: pointer; color: #3b82f6; font-size: 12px; font-weight: 600; transition: 0.2s; text-decoration: none; }
+    .ai-link:hover { color: #60a5fa; text-decoration: underline; }
+    .form-range::-webkit-slider-thumb { background: var(--venbet-orange); }
+    .form-range::-moz-range-thumb { background: var(--venbet-orange); }
 </style>
 
 <div class="offcanvas offcanvas-end broadcast-offcanvas" tabindex="-1" id="proBroadcastCanvas">
-    <div class="offcanvas-header tracker-header" style="background-color: var(--venbet-bg); border-bottom: 1px solid var(--venbet-border);">
-        <h5 class="offcanvas-title fw-bold text-white d-flex align-items-center">
-            <i class="bi bi-rocket-takeoff-fill text-primary me-2 fs-4"></i> PRO-Рассылка
-        </h5>
+    <div class="offcanvas-header" style="border-bottom: 1px solid var(--venbet-border);">
+        <h5 class="offcanvas-title fw-bold text-white">Create mailing</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
     
-    <div class="offcanvas-body" style="padding: 0 25px 25px 25px; overflow-y: auto;">
+    <div class="offcanvas-body p-4">
         
-        <div class="b-section-title mt-4"><i class="bi bi-funnel text-primary me-2"></i> 1. Выбранная аудитория</div>
-        <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background: #000; border: 1px solid var(--venbet-border);">
+        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom" style="border-color: var(--venbet-border) !important;">
             <div>
-                <div class="text-white fw-bold mb-1">Целевая группа</div>
-                <div class="small text-muted" style="font-size: 12px;">Пользователи, отмеченные в таблице</div>
+                <div class="text-white fw-bold fs-5">Целевая аудитория</div>
+                <div class="text-muted small mt-1">Пользователи, отмеченные в таблице CRM</div>
             </div>
-            <div class="fs-4 fw-bold text-primary" id="audienceCount">0</div>
+            <div class="fs-3 fw-bold text-primary" id="audienceCount">0</div>
         </div>
 
-        <div class="b-section-title"><i class="bi bi-bookmarks text-primary me-2"></i> 2. Шаблоны сообщений</div>
-        <div class="d-flex gap-2">
-            <select class="form-select form-select-sm" id="templateSelect">
-                <option value="">-- Выбрать сохраненный шаблон --</option>
-                <option value="1">🔥 Прогрев: Забери VIP статус</option>
-                <option value="2">💸 Напоминание: У тебя 0 баланс</option>
+        <div class="mb-4">
+            <label class="form-label-strict">Шаблон рассылки (Опционально)</label>
+            <div class="d-flex gap-2">
+                <select class="form-select text-body" id="templateSelect" style="background-color: var(--venbet-bg) !important;">
+                    <option value="">-- Выбрать сохраненный шаблон --</option>
+                    <option value="1">Прогрев: VIP статус</option>
+                    <option value="2">Напоминание: 0 баланс</option>
+                </select>
+                <button class="btn btn-outline-secondary border-secondary-subtle" title="Сохранить текущий текст как шаблон"><i class="bi bi-floppy text-white"></i></button>
+            </div>
+        </div>
+
+        <h5 class="text-white fw-bold mb-3 mt-5">Messages</h5>
+
+        <div class="mb-3">
+            <label class="form-label-strict">Type</label>
+            <select class="form-select text-body" id="messageTypeSelect" onchange="toggleMediaInput()" style="background-color: var(--venbet-bg) !important;">
+                <option value="text">Text</option>
+                <option value="media">Media (Фото/Видео)</option>
+                <option value="video_note">Video note (Кружочек)</option>
+                <option value="voice">Voice (Голосовое)</option>
             </select>
-            <button class="btn btn-sm btn-outline-secondary border-secondary-subtle" title="Сохранить текущий как шаблон"><i class="bi bi-floppy text-white"></i></button>
         </div>
 
-        <div class="b-section-title"><i class="bi bi-chat-left-text text-primary me-2"></i> 3. Контент</div>
-        
-        <label class="btn btn-sm w-100 mb-2 d-flex align-items-center justify-content-center fw-bold" style="background: #050505; border: 1px dashed #444; color: #a0a6b5; padding: 10px; cursor: pointer;">
-            <i class="bi bi-paperclip fs-5 me-2"></i> Прикрепить Фото / Видео
-            <input type="file" hidden accept="image/*,video/mp4" id="pushMedia">
-        </label>
-        
-        <div class="border rounded-top p-2 d-flex gap-2 flex-wrap" style="background: #000; border-color: var(--venbet-border) !important; border-bottom: none !important;">
-            <button class="toolbar-btn" onclick="insertFormat('<b>', '</b>')" title="Жирный"><i class="bi bi-type-bold"></i></button>
-            <button class="toolbar-btn" onclick="insertFormat('<i>', '</i>')" title="Курсив"><i class="bi bi-type-italic"></i></button>
-            <button class="toolbar-btn" onclick="insertFormat('<a href=\'URL\'>', '</a>')" title="Ссылка"><i class="bi bi-link-45deg"></i></button>
-            
-            <div class="border-end border-secondary mx-1"></div>
-            
-            <button class="toolbar-btn fw-bold" style="color: #a855f7; border-color: #a855f7;" title="Улучшить текст или сделать Spintax" onclick="alert('Модуль AI генерации будет подключен на бэкенде')">
-                <i class="bi bi-magic me-1"></i> AI
-            </button>
-        </div>
-        
-        <textarea id="broadcastText" class="form-control rounded-0 rounded-bottom border-top-0" rows="6" placeholder="Введите текст рассылки..." style="background: #050505 !important;"></textarea>
-        
-        <div class="mt-2 d-flex gap-2 flex-wrap">
-            <span class="macro-badge" onclick="insertFormat('{first_name}', '')">+ {first_name}</span>
-            <span class="macro-badge" onclick="insertFormat('{username}', '')">+ {username}</span>
-            <span class="macro-badge" onclick="insertFormat('{user_id}', '')">+ {user_id}</span>
-            <span class="macro-badge" onclick="insertFormat('{attempts}', '')">+ {attempts}</span>
-        </div>
-
-        <div class="b-section-title"><i class="bi bi-ui-checks-grid text-primary me-2"></i> 4. Инлайн-кнопки</div>
-        <div id="inlineButtonsContainer">
+        <div class="mb-3 d-none" id="mediaUploadBlock">
+            <label class="form-label-strict">Прикрепить файл</label>
+            <div class="rounded p-4 text-center" style="border: 1px dashed var(--venbet-muted); cursor: pointer; background-color: var(--venbet-bg);" onclick="document.getElementById('pushMedia').click()">
+                <i class="bi bi-cloud-arrow-up fs-3 text-muted d-block mb-1"></i>
+                <span class="text-muted small" id="mediaFileName">Нажмите, чтобы выбрать файл</span>
+                <input type="file" hidden id="pushMedia" onchange="document.getElementById('mediaFileName').innerText = this.files[0].name">
             </div>
-        <button class="btn btn-sm btn-outline-secondary w-100 border-dashed mt-2" style="border-style: dashed;" onclick="addInlineButton()">
-            <i class="bi bi-plus me-1"></i> Добавить кнопку
-        </button>
-
-        <div class="b-section-title"><i class="bi bi-gear-fill text-primary me-2"></i> 5. Настройки отправки</div>
-        <div class="p-3 rounded-3" style="background: #000; border: 1px solid var(--venbet-border);">
-            <div class="form-check form-switch mb-3">
-                <input class="form-check-input bg-dark border-secondary" type="checkbox" role="switch" id="turboMode" checked>
-                <label class="form-check-label text-white fw-bold" for="turboMode">⚡️ Турбо-режим (Без пауз)</label>
-                <div class="text-muted" style="font-size: 11px;">Отправка 30 сообщений в секунду.</div>
+        </div>
+        
+        <div class="mb-2">
+            <label class="form-label-strict">Text Message</label>
+            <textarea id="broadcastText" class="form-control" rows="6" placeholder="Текст сообщения..." style="background-color: var(--venbet-bg) !important; color: white !important;"></textarea>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center mb-5">
+            <div class="d-flex flex-wrap align-items-center">
+                <span class="text-muted small me-2" style="font-size: 11px;">Variables:</span>
+                <a class="macro-link" onclick="insertFormat('{first_name}', '')" title="Имя клиента в Telegram">{first_name}</a>
+                <a class="macro-link" onclick="insertFormat('{username}', '')" title="@логин пользователя">{username}</a>
+                <a class="macro-link" onclick="insertFormat('{user_id}', '')" title="ID чата с ботом">{user_id}</a>
+                <a class="macro-link" onclick="insertFormat('{attempts}', '')" title="Остаток лимитов">{attempts}</a>
             </div>
-            
-            <div id="delaySettings" style="opacity: 0.5; pointer-events: none;">
-                <label class="form-label text-white small fw-bold mb-1">⏳ Задержка между сообщениями (сек)</label>
-                <input type="range" class="form-range" min="1" max="60" value="5" id="delaySlider" oninput="document.getElementById('delayVal').innerText = this.value + ' сек'">
-                <div class="text-end text-primary fw-bold small" id="delayVal">5 сек</div>
+            <div class="d-flex align-items-center">
+                <a class="ai-link" onclick="alert('Модуль AI генерации и Spintax будет подключен на бэкенде')">Generate AI messages</a>
+                <i class="bi bi-question-circle text-muted ms-2" style="font-size: 14px; cursor: help;" title="Нейросеть перепишет текст для повышения конверсии и добавит синонимы (Spintax) для защиты от блокировок." data-bs-toggle="tooltip"></i>
             </div>
         </div>
 
-        <div class="mt-4 pt-3 border-top" style="border-color: var(--venbet-border) !important;">
-            <button class="btn btn-primary w-100 fw-bold py-3 fs-5 shadow-lg" onclick="startProBroadcast()">
-                <i class="bi bi-rocket-takeoff-fill me-2"></i> ЗАПУСТИТЬ РАССЫЛКУ
+        <div class="mb-5">
+            <div class="d-flex justify-content-between mb-2">
+                <label class="form-label-strict">Delay sec</label>
+                <span class="text-primary fw-bold small" id="delayVal">0 (Instant)</span>
+            </div>
+            <input type="range" class="form-range" min="0" max="60" value="0" id="delaySlider" oninput="updateDelayLabel(this.value)">
+        </div>
+
+        <div class="mt-4">
+            <button class="btn btn-primary w-100 fw-bold py-3 fs-6" onclick="startProBroadcast()">
+                Create
             </button>
         </div>
         
@@ -377,7 +375,7 @@
 
 <div class="modal fade" id="utmModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
+    <div class="modal-content border-0 shadow">
       <div class="modal-header border-bottom">
         <h5 class="modal-title fw-bold"><i class="bi bi-link-45deg text-primary fs-3 align-middle me-2"></i> Генератор ссылок</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -387,17 +385,17 @@
         
         <label class="form-label fw-bold small text-white">Имя бота (Username):</label>
         <div class="input-group mb-3 shadow-sm">
-            <span class="input-group-text bg-black border-secondary-subtle">@</span>
+            <span class="input-group-text border-secondary-subtle" style="background: var(--venbet-bg);">@</span>
             <input type="text" id="botUsername" class="form-control" placeholder="your_bot_username" value="VenbetApp_bot">
         </div>
 
         <label class="form-label fw-bold small text-white">Название кампании (Source):</label>
         <div class="input-group mb-4 shadow-sm">
-            <span class="input-group-text bg-black border-secondary-subtle">?start=</span>
+            <span class="input-group-text border-secondary-subtle" style="background: var(--venbet-bg);">?start=</span>
             <input type="text" id="campaignName" class="form-control" placeholder="Например: tiktok_ad_1" oninput="generateLink()">
         </div>
 
-        <div class="p-4 rounded-4 text-center border" style="background-color: #000000; border-color: var(--venbet-border) !important;">
+        <div class="p-4 rounded-4 text-center border" style="background-color: var(--venbet-bg); border-color: var(--venbet-border) !important;">
             <div class="small text-muted mb-2 text-uppercase fw-bold" style="letter-spacing: 1px;">Готовая ссылка</div>
             <code id="resultLink" class="fs-5 text-primary fw-bold d-block mb-3" style="word-break: break-all;">https://t.me/VenbetApp_bot</code>
             <button class="btn btn-light w-100 fw-bold rounded-3 py-2 text-dark" onclick="copyLink()">
@@ -418,7 +416,7 @@
     .tracker-label { font-size: 10px; font-weight: 700; color: #ffffff; text-transform: uppercase; margin-bottom: 2px; opacity: 0.7; }
     .tracker-value { font-size: 14px; color: var(--venbet-text); word-break: break-all; font-weight: 500;}
     .tracker-value.highlight { color: var(--venbet-orange); font-weight: bold;}
-    .tracker-history-item { border-left: 3px solid var(--venbet-orange); padding-left: 12px; margin-bottom: 15px; background: #000000; padding: 12px; border-radius: 0 8px 8px 0; border: 1px solid var(--venbet-border); border-left: none;}
+    .tracker-history-item { border-left: 3px solid var(--venbet-orange); padding-left: 12px; margin-bottom: 15px; background: var(--venbet-bg); padding: 12px; border-radius: 0 8px 8px 0; border: 1px solid var(--venbet-border); border-left: none;}
 </style>
 
 <div class="offcanvas offcanvas-end tracker-offcanvas" tabindex="-1" id="leadProfileCanvas">
@@ -448,7 +446,7 @@
 
         <div class="tracker-title-section mt-4">TRACKER DATA</div>
         <div class="tracker-field"><div class="tracker-label">RAW SOURCE</div><div class="tracker-value highlight" id="ocRawSource"></div></div>
-        <div class="row mt-2 p-3 rounded-3" style="background-color: #000; border: 1px solid var(--venbet-border);">
+        <div class="row mt-2 p-3 rounded-3" style="background-color: var(--venbet-bg); border: 1px solid var(--venbet-border);">
             <div class="col-6 tracker-field"><div class="tracker-label">UTM_SOURCE</div><div class="tracker-value text-white" id="ocUtmSource"></div></div>
             <div class="col-6 tracker-field"><div class="tracker-label">UTM_MEDIUM</div><div class="tracker-value" id="ocUtmMedium"></div></div>
             <div class="col-12 tracker-field mt-2 mb-0"><div class="tracker-label">CAMPAIGN_NAME</div><div class="tracker-value" id="ocUtmCampaign"></div></div>
@@ -461,6 +459,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    // Инициализация тултипов Bootstrap (для подсказок)
+    document.addEventListener("DOMContentLoaded", function(){
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+    });
+
     /* Базовые функции таблиц и массовых действий */
     document.getElementById('massGiveAttempts').addEventListener('click',function(){let s=getSelectedIds();if(!s.length)return alert('Выберите пользователей');fetch('/mass_give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s,attempts:5})}).then(()=>location.reload());});
     document.getElementById('massActivate').addEventListener('click',function(){let s=getSelectedIds();if(!s.length)return alert('Выберите пользователей');fetch('/mass_activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
@@ -537,20 +543,17 @@
     /* ЛОГИКА PRO-РАССЫЛКИ И ЛИПКОЙ ПАНЕЛИ                       */
     /* ========================================================= */
     
-    // Сбор IDшников
     function getSelectedIds() {
         let s = [];
         document.querySelectorAll('.userCheckbox:checked').forEach(cb => s.push(cb.dataset.userId));
         return s;
     }
 
-    // Чекбокс "Выбрать всех"
     function toggleAllCheckboxes(source) {
         document.querySelectorAll('.userCheckbox').forEach(cb => cb.checked = source.checked);
         updateStickyBar();
     }
 
-    // Обновление липкой панели
     function updateStickyBar() {
         const count = document.querySelectorAll('.userCheckbox:checked').length;
         const bar = document.getElementById('stickyActionBar');
@@ -559,29 +562,26 @@
         if (count > 0) {
             bar.style.opacity = '1';
             bar.style.pointerEvents = 'auto';
-            bar.style.transform = 'translate(-50%, 0)'; // Плавный выезд
+            bar.style.transform = 'translate(-50%, 0)';
         } else {
             bar.style.opacity = '0';
             bar.style.pointerEvents = 'none';
-            bar.style.transform = 'translate(-50%, 20px)'; // Плавный уход вниз
+            bar.style.transform = 'translate(-50%, 20px)';
         }
     }
 
-    // Сброс выбора
     function clearSelection() {
         document.getElementById('selectAll').checked = false;
         document.querySelectorAll('.userCheckbox').forEach(cb => cb.checked = false);
         updateStickyBar();
     }
 
-    // Открытие панели рассылки
     function openProBroadcast() {
         const count = document.querySelectorAll('.userCheckbox:checked').length;
         document.getElementById('audienceCount').innerText = count;
         new bootstrap.Offcanvas(document.getElementById('proBroadcastCanvas')).show();
     }
 
-    // Вставка тегов/макросов в textarea
     function insertFormat(startTag, endTag) {
         const textarea = document.getElementById('broadcastText');
         const start = textarea.selectionStart;
@@ -599,45 +599,42 @@
         }
     }
 
-    // Динамические инлайн-кнопки
-    let btnCounter = 0;
-    function addInlineButton() {
-        btnCounter++;
-        const container = document.getElementById('inlineButtonsContainer');
-        const row = document.createElement('div');
-        row.className = 'inline-btn-row d-flex gap-2 align-items-center';
-        row.id = `inlineBtn_${btnCounter}`;
-        row.innerHTML = `
-            <input type="text" class="form-control form-control-sm w-50" placeholder="Текст (напр. Играть)" id="btnText_${btnCounter}">
-            <input type="text" class="form-control form-control-sm w-50" placeholder="URL (https://...)" id="btnUrl_${btnCounter}">
-            <button class="btn btn-sm btn-outline-danger border-0" onclick="document.getElementById('${row.id}').remove()"><i class="bi bi-trash-fill"></i></button>
-        `;
-        container.appendChild(row);
+    // Показать/Скрыть блок загрузки файла в зависимости от типа
+    function toggleMediaInput() {
+        const type = document.getElementById('messageTypeSelect').value;
+        const block = document.getElementById('mediaUploadBlock');
+        if (type === 'text') {
+            block.classList.add('d-none');
+        } else {
+            block.classList.remove('d-none');
+            // Можно менять текст подсказки в зависимости от типа
+            let hint = "Нажмите, чтобы выбрать файл";
+            if(type === 'video_note') hint = "Выберите квадратное видео (.mp4)";
+            if(type === 'voice') hint = "Выберите голосовое (.ogg)";
+            document.getElementById('mediaFileName').innerText = hint;
+        }
     }
 
-    // Переключатель Турбо / Задержка
-    document.getElementById('turboMode').addEventListener('change', function() {
-        const delaySettings = document.getElementById('delaySettings');
-        if (this.checked) {
-            delaySettings.style.opacity = '0.5';
-            delaySettings.style.pointerEvents = 'none';
+    // Обновление текста ползунка
+    function updateDelayLabel(val) {
+        const label = document.getElementById('delayVal');
+        if (val == 0) {
+            label.innerText = '0 (Instant)';
         } else {
-            delaySettings.style.opacity = '1';
-            delaySettings.style.pointerEvents = 'auto';
+            label.innerText = val + ' sec';
         }
-    });
+    }
 
-    // Запуск рассылки (Пока просто сбор данных для бэкенда)
     function startProBroadcast() {
         const userIds = getSelectedIds();
         const text = document.getElementById('broadcastText').value.trim();
+        const type = document.getElementById('messageTypeSelect').value;
         
         if (userIds.length === 0) return alert("Аудитория пуста. Выберите пользователей в таблице.");
-        if (!text) return alert("Введите текст сообщения!");
+        if (type === 'text' && !text) return alert("Введите текст сообщения!");
         if (!confirm(`Запустить рассылку для ${userIds.length} пользователей?`)) return;
         
-        // В следующем шаге мы подключим это к новому бэкенду.
-        alert("UI работает идеально. Данные собраны. Ждем подключения бэкенда в Этапе 2.2!");
+        alert("UI минимализм работает идеально. Ждем подключения бэкенда в Этапе 2.2!");
     }
 
     /* ========================================================= */
