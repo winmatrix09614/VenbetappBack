@@ -37,7 +37,7 @@
 
     <div class="card shadow-sm border-0 rounded-4">
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-responsive rounded-4">
                 <table class="table table-bordered text-center align-middle mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -56,11 +56,11 @@
                             <td class="ps-4 fw-bold text-primary text-start text-nowrap" style="letter-spacing: 0.5px;">{{ row.date }}</td>
                             <td class="fw-bold text-white fs-5">{{ row.total }}</td>
                             
-                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d0 / 100 }});">{{ row.d0 }}%</td>
-                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d1 / 100 }});">{{ row.d1 }}%</td>
-                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d2 / 100 }});">{{ row.d2 }}%</td>
-                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d3 / 100 }});">{{ row.d3 }}%</td>
-                            <td class="pe-4 text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d7 / 100 }});">{{ row.d7 }}%</td>
+                            <td class="text-white text-shadow fw-bold" {% if row.d0 > 0 %}style="background-color: rgba(16, 185, 129, {{ row.d0 / 100 }});"{% endif %}>{{ row.d0 }}%</td>
+                            <td class="text-white text-shadow fw-bold" {% if row.d1 > 0 %}style="background-color: rgba(16, 185, 129, {{ row.d1 / 100 }});"{% endif %}>{{ row.d1 }}%</td>
+                            <td class="text-white text-shadow fw-bold" {% if row.d2 > 0 %}style="background-color: rgba(16, 185, 129, {{ row.d2 / 100 }});"{% endif %}>{{ row.d2 }}%</td>
+                            <td class="text-white text-shadow fw-bold" {% if row.d3 > 0 %}style="background-color: rgba(16, 185, 129, {{ row.d3 / 100 }});"{% endif %}>{{ row.d3 }}%</td>
+                            <td class="pe-4 text-white text-shadow fw-bold" {% if row.d7 > 0 %}style="background-color: rgba(16, 185, 129, {{ row.d7 / 100 }});"{% endif %}>{{ row.d7 }}%</td>
                         </tr>
                         {% else %}
                         <tr>

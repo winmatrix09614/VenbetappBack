@@ -99,6 +99,22 @@
 
         /* Кастомный тумблер скрыт */
         .theme-toggle { display: none; }
+        
+        /* 1. Убираем дефолтные стрелочки у input type="number" */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield; /* Для Firefox */
+}
+
+/* 2. Лечим вылезающие острые углы у всех закругленных таблиц */
+.table-responsive.rounded-4,
+.table-responsive.rounded-3 {
+    overflow: hidden !important;
+}
     </style>
 </head>
 <body>
