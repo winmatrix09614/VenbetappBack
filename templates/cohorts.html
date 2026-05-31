@@ -4,26 +4,45 @@
 {% block content %}
 <div class="container-fluid px-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">🔥 Retention Heatmap (Когорты)</h2>
-        <a href="/admin/analytics/traffic" class="btn btn-outline-secondary btn-sm">Воронка трафика →</a>
+        <h2 class="mb-0 fw-bold"><i class="bi bi-grid-1x2 text-primary me-2"></i> Retention (Когорты)</h2>
+        <a href="/admin/analytics/traffic" class="btn btn-outline-secondary border-0 btn-sm fw-bold">Воронка трафика <i class="bi bi-arrow-right ms-1"></i></a>
     </div>
 
-    <div class="alert alert-info border-0 border-start border-info border-4 shadow-sm mb-4 bg-body-inner">
-        <h6 class="fw-bold mb-1"><i class="bi bi-info-circle me-2"></i>Что показывает эта таблица?</h6>
+    <div class="alert p-3 mb-4 rounded-4 shadow-sm" style="background-color: var(--venbet-panel); border: 1px solid var(--venbet-border); border-left: 4px solid var(--venbet-orange);">
+        <h6 class="fw-bold mb-1 text-white"><i class="bi bi-info-circle text-primary me-2"></i>Как читать эту таблицу?</h6>
         <p class="mb-0 small text-muted">
-            Когортный анализ Product Retention. Каждая строка — это группа лидов, зарегистрировавшихся в один день. 
-            Проценты показывают, какая доля этой группы сгенерировала хотя бы 1 прогноз (воспользовалась ИИ) на 0-й, 1-й, 2-й и т.д. день после регистрации. Чем ярче зеленая ячейка, тем лучше возвращаемость (LTV).
+            Каждая строка — это группа лидов, зарегистрировавшихся в один день. 
+            Проценты показывают, какая доля этой группы сгенерировала хотя бы 1 прогноз на 0-й (день реги), 1-й, 2-й и т.д. день. Чем ярче зеленая ячейка, тем лучше возвращаемость (LTV) трафика.
         </p>
     </div>
 
-    <div class="card shadow-sm border-0 bg-body-inner rounded-4">
+    <div class="card mb-4 shadow-sm border-0 rounded-4">
+        <div class="card-body">
+            <form method="get" class="d-flex align-items-end gap-3">
+                <div>
+                    <label class="form-label small text-muted mb-1 fw-bold">Начало (Start Date)</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                </div>
+                <div>
+                    <label class="form-label small text-muted mb-1 fw-bold">Конец (End Date)</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm"><i class="bi bi-filter me-1"></i> Применить фильтр</button>
+                    <a href="/admin/analytics/cohorts" class="btn btn-outline-secondary px-3 ms-1 border-0">Сбросить</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-bordered text-center align-middle mb-0" style="table-layout: fixed;">
+                <table class="table table-bordered text-center align-middle mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th class="ps-4 text-start" style="width: 150px;">Когорта (Дата)</th>
-                            <th>Всего юзеров</th>
+                            <th class="ps-4 text-start text-nowrap">Когорта (Дата)</th>
+                            <th class="text-nowrap px-3">Всего юзеров</th>
                             <th>Day 0</th>
                             <th>Day 1</th>
                             <th>Day 2</th>
@@ -34,18 +53,21 @@
                     <tbody>
                         {% for row in cohorts %}
                         <tr>
-                            <td class="ps-4 fw-bold text-primary text-start">{{ row.date }}</td>
-                            <td class="fw-bold text-body-secondary">{{ row.total }}</td>
+                            <td class="ps-4 fw-bold text-primary text-start text-nowrap" style="letter-spacing: 0.5px;">{{ row.date }}</td>
+                            <td class="fw-bold text-white fs-5">{{ row.total }}</td>
                             
-                            <td class="text-white text-shadow" style="background-color: rgba(16, 185, 129, {{ row.d0 / 100 }});">{{ row.d0 }}%</td>
-                            <td class="text-white text-shadow" style="background-color: rgba(16, 185, 129, {{ row.d1 / 100 }});">{{ row.d1 }}%</td>
-                            <td class="text-white text-shadow" style="background-color: rgba(16, 185, 129, {{ row.d2 / 100 }});">{{ row.d2 }}%</td>
-                            <td class="text-white text-shadow" style="background-color: rgba(16, 185, 129, {{ row.d3 / 100 }});">{{ row.d3 }}%</td>
-                            <td class="pe-4 text-white text-shadow" style="background-color: rgba(16, 185, 129, {{ row.d7 / 100 }});">{{ row.d7 }}%</td>
+                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d0 / 100 }});">{{ row.d0 }}%</td>
+                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d1 / 100 }});">{{ row.d1 }}%</td>
+                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d2 / 100 }});">{{ row.d2 }}%</td>
+                            <td class="text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d3 / 100 }});">{{ row.d3 }}%</td>
+                            <td class="pe-4 text-white text-shadow fw-bold" style="background-color: rgba(16, 185, 129, {{ row.d7 / 100 }});">{{ row.d7 }}%</td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-5">Недостаточно данных для формирования когорт</td>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary"></i>
+                                Нет данных для формирования когорт в этом периоде
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -56,7 +78,7 @@
 </div>
 
 <style>
-    /* Легкая тень для текста поверх тепловой карты, чтобы цифры хорошо читались */
-    .text-shadow { text-shadow: 0px 1px 3px rgba(0,0,0,0.6); font-weight: 600; }
+    /* Легкая тень для цифр внутри цветных ячеек, чтобы они читались всегда */
+    .text-shadow { text-shadow: 0px 1px 4px rgba(0,0,0,0.8); }
 </style>
 {% endblock %}

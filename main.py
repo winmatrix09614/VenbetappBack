@@ -27,6 +27,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Body
+from fastapi import Query
+from datetime import datetime, timedelta
 
 # ---- База данных (SQLAlchemy) ----
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, BigInteger, Text, func, case
@@ -1220,18 +1222,37 @@ async def traffic_analytics_page(request: Request, db: Session = Depends(get_db)
     })
 
     # ---------- Когортный Анализ (Product Retention) ----------
+# ---------- Когортный Анализ (Product Retention) ----------
 @app.get("/admin/analytics/cohorts", response_class=HTMLResponse)
-async def cohorts_page(request: Request, db: Session = Depends(get_db)):
+async def cohorts_page(
+    request: Request, 
+    start_date: str = Query(None), 
+    end_date: str = Query(None), 
+    db: Session = Depends(get_db)
+):
     staff = await get_current_staff(request, db)
     if not staff:
         return RedirectResponse(url="/admin/login")
 
-    # Берем последние 14 дней для анализа
-    start_date = datetime.utcnow() - timedelta(days=14)
-    start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    # 1. Логика фильтрации по датам
+    try:
+        if start_date and end_date:
+            s_date = datetime.strptime(start_date, '%Y-%m-%d')
+            e_date = datetime.strptime(end_date, '%Y-%m-%d')
+        else:
+            # По умолчанию: последние 14 дней
+            e_date = datetime.utcnow()
+            s_date = e_date - timedelta(days=14)
+    except ValueError:
+        e_date = datetime.utcnow()
+        s_date = e_date - timedelta(days=14)
 
-    # 1. Формируем когорты (группируем юзеров по дате регистрации)
-    users = db.query(User.id, User.created_at).filter(User.created_at >= start_date).all()
+    # Округляем начало дня и конец дня
+    s_date = s_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    e_date = e_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    # 2. Формируем когорты (группируем юзеров по дате регистрации в заданном диапазоне)
+    users = db.query(User.id, User.created_at).filter(User.created_at >= s_date, User.created_at <= e_date).all()
     
     cohorts = {}
     user_reg_dates = {}
@@ -1241,10 +1262,9 @@ async def cohorts_page(request: Request, db: Session = Depends(get_db)):
             cohorts[d_str] = {"total": 0, "users": set(), "retention": {0:0, 1:0, 2:0, 3:0, 7:0}}
         cohorts[d_str]["total"] += 1
         cohorts[d_str]["users"].add(u.id)
-        # Запоминаем дату реги для каждого, отбрасывая часы/минуты
         user_reg_dates[u.id] = u.created_at.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # 2. Достаем историю генерации прогнозов
+    # 3. Достаем историю генерации прогнозов
     user_ids = list(user_reg_dates.keys())
     if user_ids:
         events = db.query(TrafficEvent.user_id, TrafficEvent.timestamp).filter(
@@ -1264,7 +1284,7 @@ async def cohorts_page(request: Request, db: Session = Depends(get_db)):
             if delta_days >= 0:
                 user_active_days[uid].add(delta_days)
 
-        # 3. Вычисляем Retention (возвраты по дням)
+        # 4. Вычисляем Retention (возвраты по дням)
         for cohort_date, data in cohorts.items():
             for uid in data["users"]:
                 if uid in user_active_days:
@@ -1290,6 +1310,8 @@ async def cohorts_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("cohorts.html", {
         "request": request,
         "cohorts": result_cohorts,
+        "start_date": s_date.strftime('%Y-%m-%d'),
+        "end_date": e_date.strftime('%Y-%m-%d'),
         "staff_role": staff.role
     })
 
