@@ -648,6 +648,25 @@
         alert("UI минимализм работает идеально. Ждем подключения бэкенда в Этапе 2.2!");
     }
 
+    // --- ДОБАВИТЬ ЭТОТ БЛОК ---
+    // Прячем липкую панель при открытии PRO-рассылки и возвращаем при закрытии
+    const proBroadcastCanvasEl = document.getElementById('proBroadcastCanvas');
+    if (proBroadcastCanvasEl) {
+        proBroadcastCanvasEl.addEventListener('show.bs.offcanvas', function () {
+            // Принудительно скрываем нижнюю панель
+            const bar = document.getElementById('stickyActionBar');
+            bar.style.opacity = '0';
+            bar.style.pointerEvents = 'none';
+            bar.style.transform = 'translate(-50%, 20px)';
+        });
+
+        proBroadcastCanvasEl.addEventListener('hidden.bs.offcanvas', function () {
+            // При закрытии проверяем, остались ли галочки, и если да - возвращаем панель
+            updateStickyBar(); 
+        });
+    }
+    // --------------------------
+
     /* ========================================================= */
     /* ГРАФИКИ И УВЕДОМЛЕНИЯ                                     */
     /* ========================================================= */
