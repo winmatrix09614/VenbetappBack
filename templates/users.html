@@ -278,25 +278,47 @@
 </div>
 
 <style>
-    .broadcast-offcanvas { background-color: var(--venbet-panel); border-left: 1px solid var(--venbet-border); width: 750px; }
+    /* УВЕЛИЧЕННАЯ ШИРИНА ПАНЕЛИ ДО 900px */
+    .broadcast-offcanvas { background-color: var(--venbet-panel); border-left: 1px solid var(--venbet-border); width: 900px; }
     .form-label-strict { font-size: 12px; font-weight: 600; color: #a0a6b5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .macro-link { cursor: pointer; color: var(--venbet-muted); font-size: 12px; transition: 0.2s; text-decoration: none; margin-right: 12px; }
-    .macro-link:hover { color: var(--venbet-orange); text-decoration: underline; }
-    .ai-link { cursor: pointer; color: #3b82f6; font-size: 12px; font-weight: 600; transition: 0.2s; text-decoration: none; }
+    
+    /* Стили для новых бейджей-переменных */
+    .macro-pill {
+        cursor: pointer;
+        background-color: #050505;
+        border: 1px solid var(--venbet-border);
+        color: #a0a6b5;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-block;
+        margin-right: 8px;
+        margin-bottom: 8px;
+    }
+    .macro-pill:hover {
+        border-color: var(--venbet-orange);
+        color: var(--venbet-orange);
+        background-color: rgba(255, 140, 0, 0.05);
+    }
+    
+    .ai-link { cursor: pointer; color: #3b82f6; font-size: 13px; font-weight: 600; transition: 0.2s; text-decoration: none; }
     .ai-link:hover { color: #60a5fa; text-decoration: underline; }
     .form-range::-webkit-slider-thumb { background: var(--venbet-orange); }
     .form-range::-moz-range-thumb { background: var(--venbet-orange); }
 </style>
 
 <div class="offcanvas offcanvas-end broadcast-offcanvas" tabindex="-1" id="proBroadcastCanvas">
-    <div class="offcanvas-header" style="border-bottom: 1px solid var(--venbet-border);">
+    <div class="offcanvas-header p-4" style="border-bottom: 1px solid var(--venbet-border);">
         <h5 class="offcanvas-title fw-bold text-white">Create mailing</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
     
     <div class="offcanvas-body p-4">
         
-        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom" style="border-color: var(--venbet-border) !important;">
+        <div class="d-flex justify-content-between align-items-center mb-5 pb-3 border-bottom" style="border-color: var(--venbet-border) !important;">
             <div>
                 <div class="text-white fw-bold fs-5">Целевая аудитория</div>
                 <div class="text-muted small mt-1">Пользователи, отмеченные в таблице CRM</div>
@@ -304,21 +326,9 @@
             <div class="fs-3 fw-bold text-primary" id="audienceCount">0</div>
         </div>
 
+        <h5 class="text-white fw-bold mb-4">Messages</h5>
+
         <div class="mb-4">
-            <label class="form-label-strict">Шаблон рассылки (Опционально)</label>
-            <div class="d-flex gap-2">
-                <select class="form-select text-body" id="templateSelect" style="background-color: var(--venbet-bg) !important;">
-                    <option value="">-- Выбрать сохраненный шаблон --</option>
-                    <option value="1">Прогрев: VIP статус</option>
-                    <option value="2">Напоминание: 0 баланс</option>
-                </select>
-                <button class="btn btn-outline-secondary border-secondary-subtle" title="Сохранить текущий текст как шаблон"><i class="bi bi-floppy text-white"></i></button>
-            </div>
-        </div>
-
-        <h5 class="text-white fw-bold mb-3 mt-5">Messages</h5>
-
-        <div class="mb-3">
             <label class="form-label-strict">Type</label>
             <select class="form-select text-body" id="messageTypeSelect" onchange="toggleMediaInput()" style="background-color: var(--venbet-bg) !important;">
                 <option value="text">Text</option>
@@ -328,7 +338,7 @@
             </select>
         </div>
 
-        <div class="mb-3 d-none" id="mediaUploadBlock">
+        <div class="mb-4 d-none" id="mediaUploadBlock">
             <label class="form-label-strict">Прикрепить файл</label>
             <div class="rounded p-4 text-center" style="border: 1px dashed var(--venbet-muted); cursor: pointer; background-color: var(--venbet-bg);" onclick="document.getElementById('pushMedia').click()">
                 <i class="bi bi-cloud-arrow-up fs-3 text-muted d-block mb-1"></i>
@@ -337,26 +347,28 @@
             </div>
         </div>
         
-        <div class="mb-2">
+        <div class="mb-3">
             <label class="form-label-strict">Text Message</label>
-            <textarea id="broadcastText" class="form-control" rows="6" placeholder="Текст сообщения..." style="background-color: var(--venbet-bg) !important; color: white !important;"></textarea>
+            <textarea id="broadcastText" class="form-control" rows="8" placeholder="Текст сообщения..." style="background-color: var(--venbet-bg) !important; color: white !important; font-size: 14px;"></textarea>
         </div>
         
-        <div class="d-flex justify-content-between align-items-center mb-5">
-            <div class="d-flex flex-wrap align-items-center">
-                <span class="text-muted small me-2" style="font-size: 11px;">Variables:</span>
-                <a class="macro-link" onclick="insertFormat('{first_name}', '')" title="Имя клиента в Telegram">{first_name}</a>
-                <a class="macro-link" onclick="insertFormat('{username}', '')" title="@логин пользователя">{username}</a>
-                <a class="macro-link" onclick="insertFormat('{user_id}', '')" title="ID чата с ботом">{user_id}</a>
-                <a class="macro-link" onclick="insertFormat('{attempts}', '')" title="Остаток лимитов">{attempts}</a>
+        <div class="d-flex justify-content-between align-items-start mb-5">
+            <div>
+                <div class="text-muted small mb-2" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Variables:</div>
+                <div class="d-flex flex-wrap">
+                    <span class="macro-pill" onclick="insertFormat('{first_name}', '')" data-bs-toggle="tooltip" data-bs-placement="top" title="Подставит имя клиента (например: Иван)">{first_name}</span>
+                    <span class="macro-pill" onclick="insertFormat('{username}', '')" data-bs-toggle="tooltip" data-bs-placement="top" title="Подставит @логин клиента">{username}</span>
+                    <span class="macro-pill" onclick="insertFormat('{user_id}', '')" data-bs-toggle="tooltip" data-bs-placement="top" title="Подставит уникальный числовой ID чата">{user_id}</span>
+                    <span class="macro-pill" onclick="insertFormat('{attempts}', '')" data-bs-toggle="tooltip" data-bs-placement="top" title="Подставит текущий остаток попыток юзера">{attempts}</span>
+                </div>
             </div>
-            <div class="d-flex align-items-center">
-                <a class="ai-link" onclick="alert('Модуль AI генерации и Spintax будет подключен на бэкенде')">Generate AI messages</a>
-                <i class="bi bi-question-circle text-muted ms-2" style="font-size: 14px; cursor: help;" title="Нейросеть перепишет текст для повышения конверсии и добавит синонимы (Spintax) для защиты от блокировок." data-bs-toggle="tooltip"></i>
+            <div class="d-flex align-items-center mt-4">
+                <a class="ai-link" onclick="alert('Модуль AI генерации и Spintax будет подключен на бэкенде')"><i class="bi bi-magic me-1"></i> Generate AI messages</a>
+                <i class="bi bi-question-circle text-muted ms-2" style="font-size: 14px; cursor: help;" title="Нейросеть перепишет текст для повышения конверсии и добавит синонимы (Spintax) для защиты от блокировок." data-bs-toggle="tooltip" data-bs-placement="top"></i>
             </div>
         </div>
 
-        <div class="mb-5">
+        <div class="mb-5 pt-3 border-top" style="border-color: var(--venbet-border) !important;">
             <div class="d-flex justify-content-between mb-2">
                 <label class="form-label-strict">Delay sec</label>
                 <span class="text-primary fw-bold small" id="delayVal">0 (Instant)</span>
@@ -364,8 +376,8 @@
             <input type="range" class="form-range" min="0" max="60" value="0" id="delaySlider" oninput="updateDelayLabel(this.value)">
         </div>
 
-        <div class="mt-4">
-            <button class="btn btn-primary w-100 fw-bold py-3 fs-6" onclick="startProBroadcast()">
+        <div class="mt-4 pt-3">
+            <button class="btn btn-primary w-100 fw-bold py-3 fs-6 rounded-3" onclick="startProBroadcast()">
                 Create
             </button>
         </div>
@@ -420,7 +432,7 @@
 </style>
 
 <div class="offcanvas offcanvas-end tracker-offcanvas" tabindex="-1" id="leadProfileCanvas">
-    <div class="offcanvas-header tracker-header">
+    <div class="offcanvas-header tracker-header p-4">
         <h5 class="offcanvas-title fw-bold text-white">
             <i class="bi bi-person-vcard text-primary me-2"></i> Карточка лида <span class="badge bg-secondary ms-2">#<span id="ocUserId"></span></span>
         </h5>
@@ -459,7 +471,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Инициализация тултипов Bootstrap (для подсказок)
+    // Инициализация тултипов Bootstrap (для красивых подсказок над кнопками)
     document.addEventListener("DOMContentLoaded", function(){
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -607,7 +619,6 @@
             block.classList.add('d-none');
         } else {
             block.classList.remove('d-none');
-            // Можно менять текст подсказки в зависимости от типа
             let hint = "Нажмите, чтобы выбрать файл";
             if(type === 'video_note') hint = "Выберите квадратное видео (.mp4)";
             if(type === 'voice') hint = "Выберите голосовое (.ogg)";
