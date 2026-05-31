@@ -264,7 +264,7 @@
     </div>
 </div>
 
-<div id="stickyActionBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg rounded-4 px-4 py-3 d-flex align-items-center justify-content-between" style="background-color: var(--venbet-panel); border: 1px solid var(--venbet-border); box-shadow: 0 15px 35px rgba(0,0,0,0.5) !important; width: 800px; max-width: 95vw; z-index: 1050; opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.3s ease; transform: translate(-50%, 20px);">
+<div id="stickyActionBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg rounded-4 px-4 py-3 d-flex align-items-center justify-content-between" style="background-color: var(--venbet-panel); border: 1px solid var(--venbet-border); box-shadow: 0 15px 35px rgba(0,0,0,0.5) !important; width: 800px !important; max-width: 95vw !important; z-index: 1050; opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.3s ease; transform: translate(-50%, 20px);">
     <div class="text-white fw-bold d-flex align-items-center">
         <div class="bg-primary text-black rounded-3 d-flex align-items-center justify-content-center me-3" style="width: 38px; height: 38px; font-size: 16px;" id="selectedCountBadge">0</div>
         <span class="fs-6 text-uppercase" style="letter-spacing: 0.5px;">пользователей выбрано</span>
@@ -310,7 +310,7 @@
     .form-range::-moz-range-thumb { background: var(--venbet-orange); }
 </style>
 
-<div class="offcanvas offcanvas-end broadcast-offcanvas" tabindex="-1" id="proBroadcastCanvas">
+<div class="offcanvas offcanvas-end broadcast-offcanvas" tabindex="-1" id="proBroadcastCanvas" style="width: 900px !important; max-width: 100vw !important; --bs-offcanvas-width: 900px;">
     <div class="offcanvas-header p-4" style="border-bottom: 1px solid var(--venbet-border);">
         <h5 class="offcanvas-title fw-bold text-white">Create mailing</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
