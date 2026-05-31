@@ -363,7 +363,7 @@
                 </div>
             </div>
             <div class="d-flex align-items-center mt-4">
-                <a class="ai-link" onclick="alert('Модуль AI генерации и Spintax будет подключен на бэкенде')"><i class="bi bi-magic me-1"></i> Generate AI messages</a>
+                <a class="ai-link" onclick="generateAiMessage()"><i class="bi bi-magic me-1"></i> Generate AI messages</a>
                 <i class="bi bi-question-circle text-muted ms-2" style="font-size: 14px; cursor: help;" title="Нейросеть перепишет текст для повышения конверсии и добавит синонимы (Spintax) для защиты от блокировок." data-bs-toggle="tooltip" data-bs-placement="top"></i>
             </div>
         </div>
@@ -636,40 +636,114 @@
         }
     }
 
-    function startProBroadcast() {
+    // --- 1. ЗАПУСК РАССЫЛКИ ---
+    async function startProBroadcast() {
         const userIds = getSelectedIds();
         const text = document.getElementById('broadcastText').value.trim();
         const type = document.getElementById('messageTypeSelect').value;
+        const delay = parseFloat(document.getElementById('delaySlider').value);
         
         if (userIds.length === 0) return alert("Аудитория пуста. Выберите пользователей в таблице.");
         if (type === 'text' && !text) return alert("Введите текст сообщения!");
-        if (!confirm(`Запустить рассылку для ${userIds.length} пользователей?`)) return;
+        if (!confirm(`Запустить фоновую рассылку для ${userIds.length} пользователей?`)) return;
         
-        alert("UI минимализм работает идеально. Ждем подключения бэкенда в Этапе 2.2!");
+        // Меняем кнопку на загрузку
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Запуск...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/pro_broadcast', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_ids: userIds, text: text, type: type, delay: delay })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                alert("🚀 Рассылка успешно отправлена в фоновую очередь сервера!");
+                // Закрываем панель и снимаем галочки
+                bootstrap.Offcanvas.getInstance(document.getElementById('proBroadcastCanvas')).hide();
+                clearSelection(); 
+            } else {
+                alert("Ошибка: " + data.message);
+            }
+        } catch (e) {
+            alert("Ошибка сети");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 
-    // --- ДОБАВИТЬ ЭТОТ БЛОК ---
-    // Прячем липкую панель при открытии PRO-рассылки и возвращаем при закрытии
-    const proBroadcastCanvasEl = document.getElementById('proBroadcastCanvas');
-    if (proBroadcastCanvasEl) {
-        proBroadcastCanvasEl.addEventListener('show.bs.offcanvas', function () {
-            // Принудительно скрываем нижнюю панель
-            const bar = document.getElementById('stickyActionBar');
-            bar.style.opacity = '0';
-            bar.style.pointerEvents = 'none';
-            bar.style.transform = 'translate(-50%, 20px)';
-        });
+    // --- 2. ГЕНЕРАЦИЯ AI ТЕКСТА ---
+    async function generateAiMessage() {
+        let promptText = prompt("О чем должна быть рассылка?\n(Например: напомни, что баланс 0 и нужно забрать бонус)");
+        if (!promptText) return;
 
-        proBroadcastCanvasEl.addEventListener('hidden.bs.offcanvas', function () {
-            // При закрытии проверяем, остались ли галочки, и если да - возвращаем панель
-            updateStickyBar(); 
-        });
+        const aiLink = document.querySelector('.ai-link');
+        const originalHtml = aiLink.innerHTML;
+        aiLink.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width: 1rem; height: 1rem;"></span> Генерация...';
+        aiLink.style.pointerEvents = 'none';
+
+        try {
+            const res = await fetch('/api/generate_ai_message', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ prompt: promptText })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                // Вставляем сгенерированный текст в поле
+                document.getElementById('broadcastText').value = data.text;
+            } else {
+                alert("Ошибка AI: " + data.message);
+            }
+        } catch(e) {
+            alert("Ошибка при подключении к Gemini API");
+        } finally {
+            aiLink.innerHTML = originalHtml;
+            aiLink.style.pointerEvents = 'auto';
+        }
     }
-    // --------------------------
 
-    /* ========================================================= */
-    /* ГРАФИКИ И УВЕДОМЛЕНИЯ                                     */
-    /* ========================================================= */
+    // --- 2. ГЕНЕРАЦИЯ AI ТЕКСТА (Берет текст из поля ввода) ---
+    async function generateAiMessage() {
+        const textInput = document.getElementById('broadcastText');
+        const draftText = textInput.value.trim();
+        
+        if (!draftText) {
+            return alert("Напишите черновик текста в поле, а затем нажмите на эту кнопку, чтобы ИИ улучшил его и добавил Spintax.");
+        }
+
+        const aiLink = document.querySelector('.ai-link');
+        const originalHtml = aiLink.innerHTML;
+        aiLink.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width: 1rem; height: 1rem;"></span> Работает ИИ...';
+        aiLink.style.pointerEvents = 'none';
+
+        try {
+            const res = await fetch('/api/generate_ai_message', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ prompt: draftText })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                // Вставляем сгенерированный текст обратно в поле
+                textInput.value = data.text;
+            } else {
+                alert("Ошибка AI: " + data.message);
+            }
+        } catch(e) {
+            alert("Ошибка при подключении к Gemini API");
+        } finally {
+            aiLink.innerHTML = originalHtml;
+            aiLink.style.pointerEvents = 'auto';
+        }
+    }
     (function() {
         let lastCount = Number({{ pending_count | default(0) }});
         let eventSource = null;

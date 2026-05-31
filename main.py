@@ -1461,95 +1461,124 @@ async def mass_ban(request: Request, data: dict, db: Session = Depends(get_db)):
     log_staff_action(db, staff.id, f"mass ban users: {user_ids}")
     return {"status": "ok"}
 
-# ---------- Рассылки (Этап 5) ----------
-async def run_broadcast_task(segment: str, text: str, staff_id: int):
-    """Фоновая задача для безопасной рассылки (чтобы не словить Flood Limit от Telegram)"""
+# ---------- Рассылки (Этап 5: PRO-Модуль) ----------
+
+# 1. Движок Spintax и Макросов
+def process_message_text(text: str, user) -> str:
+    # Обработка Spintax: {Вариант1|Вариант2|Вариант3}
+    pattern = re.compile(r'\{([^{}]+)\}')
+    def replacer(match):
+        options = match.group(1).split('|')
+        return random.choice(options)
+    
+    while pattern.search(text):
+        text = pattern.sub(replacer, text)
+        
+    # Обработка макросов (переменных)
+    first_name = getattr(user, 'first_name', '') or "друг"
+    username = f"@{user.username}" if getattr(user, 'username', None) else "друг"
+    
+    text = text.replace("{first_name}", first_name)
+    text = text.replace("{username}", username)
+    text = text.replace("{user_id}", str(user.id))
+    text = text.replace("{attempts}", str(getattr(user, 'attempts_left', 0)))
+    
+    return text
+
+# 2. Фоновая задача для безопасной рассылки
+async def run_broadcast_task(user_ids: list, text: str, msg_type: str, delay: float, staff_id: int):
     db = SessionLocal()
     try:
-        query = db.query(User).filter(User.telegram_id.isnot(None), User.is_banned == False)
-        
-        if segment == "active":
-            query = query.filter(User.is_active == True)
-        elif segment == "dead_souls":
-            three_days_ago = datetime.utcnow() - timedelta(days=3)
-            query = query.filter(
-                User.is_active == True, 
-                (User.last_activity < three_days_ago) | (User.last_activity == None)
-            )
-        elif segment == "pending":
-            query = query.filter(User.is_active == False)
-            
-        users_to_send = query.all()
+        # Берем только выбранных юзеров, у которых есть Telegram ID и нет бана
+        users_to_send = db.query(User).filter(User.id.in_(user_ids), User.telegram_id.isnot(None), User.is_banned == False).all()
         success_count = 0
         
         for u in users_to_send:
+            final_text = process_message_text(text, u)
             try:
-                # Отправляем сообщение, поддерживаем HTML-разметку
-                await bot.send_message(u.telegram_id, text, parse_mode="HTML")
+                if msg_type == "text":
+                    await bot.send_message(u.telegram_id, final_text, parse_mode="HTML")
+                # (Тут позже добавим отправку фото/видео/кружочков)
+                
                 success_count += 1
-                # Обязательная пауза! Telegram разрешает ~30 сообщений в секунду.
-                await asyncio.sleep(0.05) 
+                
+                # Безопасная задержка (Турбо-режим = 0.05 сек)
+                sleep_time = delay if delay > 0 else 0.05
+                await asyncio.sleep(sleep_time) 
             except TelegramForbiddenError:
-                # Отлавливаем блокировку и очищаем базу от мусора
                 u.is_blocked_bot = True
                 u.is_active = False
-                print(f"[BLOCK] Юзер {u.telegram_id} заблокировал бота.")
             except Exception as e:
                 print(f"[BROADCAST ERROR] User {u.id}: {e}")
                 
-        db.commit() # Сохраняем свежие статусы блокировок в базу
+        db.commit() 
         
-        # Сохраняем детальный лог в новую таблицу
-        broadcast_record = BroadcastLog(
-            staff_id=staff_id,
-            segment=segment,
-            text=text,
-            sent_count=success_count
-        )
+        broadcast_record = BroadcastLog(staff_id=staff_id, segment="manual_selection", text=text, sent_count=success_count)
         db.add(broadcast_record)
-        
-        # Оставляем и краткий лог действий сотрудника для истории
-        log = StaffLog(staff_id=staff_id, action=f"broadcast to '{segment}', sent: {success_count}")
+        log = StaffLog(staff_id=staff_id, action=f"PRO broadcast sent to {success_count} users")
         db.add(log)
-        
         db.commit()
         print(f"✅ Рассылка завершена. Успешно: {success_count}/{len(users_to_send)}")
     finally:
         db.close()
 
-# Эндпоинт страницы "История рассылок" (Доступен всем)
+# Эндпоинт "История рассылок"
 @app.get("/broadcasts", response_class=HTMLResponse)
 async def broadcast_logs_page(request: Request, db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
-    if not staff:
-        return RedirectResponse(url="/admin/login")
-
-    # Загружаем последние 50 рассылок
+    if not staff: return RedirectResponse(url="/admin/login")
     logs = db.query(BroadcastLog).options(joinedload(BroadcastLog.staff)).order_by(BroadcastLog.created_at.desc()).limit(50).all()
-    
-    return templates.TemplateResponse("broadcast_logs.html", {
-        "request": request,
-        "logs": logs,
-        "staff_role": staff.role
-    })
+    return templates.TemplateResponse("broadcast_logs.html", {"request": request, "logs": logs, "staff_role": staff.role})
 
-@app.post("/api/broadcast")
-async def api_broadcast(request: Request, data: dict, db: Session = Depends(get_db)):
+class ProBroadcastRequest(BaseModel):
+    user_ids: list[int]
+    text: str
+    type: str = "text"
+    delay: float = 0.0
+
+# 3. Эндпоинт запуска рассылки
+@app.post("/api/pro_broadcast")
+async def api_pro_broadcast(payload: ProBroadcastRequest, request: Request, db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
-    if not staff:
-        raise HTTPException(status_code=401)
-    if staff.role == "buyer":
-        raise HTTPException(status_code=403, detail="У баеров нет прав на рассылку")
-        
-    segment = data.get("segment")
-    text = data.get("text")
-    if not segment or not text:
-        return {"status": "error", "message": "Не указан сегмент или текст"}
-        
-    # Запускаем функцию в фоне!
-    asyncio.create_task(run_broadcast_task(segment, text, staff.id))
+    if not staff: raise HTTPException(status_code=401)
+    if staff.role == "buyer": raise HTTPException(status_code=403, detail="У баеров нет прав на рассылку")
     
+    # Запускаем в фоне, чтобы интерфейс не зависал
+    asyncio.create_task(run_broadcast_task(payload.user_ids, payload.text, payload.type, payload.delay, staff.id))
     return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
+
+class AIGenerateRequest(BaseModel):
+    prompt: str
+
+# 4. Эндпоинт для AI Генерации текста (Использует твой Gemini)
+@app.post("/api/generate_ai_message")
+async def generate_ai_message(payload: AIGenerateRequest, request: Request, db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff: raise HTTPException(status_code=401)
+    
+    system_instruction = """
+    Ты — профессиональный копирайтер. Пользователь написал черновик для рассылки в Telegram-боте. 
+    Твоя задача — переписать этот текст, сделав его более качественным, и добавить Spintax (синонимы в формате {Слово1|Слово2|Слово3}) для защиты от блокировок.
+    
+    ПРАВИЛА:
+    1. Сохрани оригинальный смысл, длину и тональность текста (если текст дерзкий — оставь дерзким, если официальный — сохрани стиль).
+    2. Используй эмодзи только если они уместны и подходят под тон оригинального текста. Не перебарщивай.
+    3. Обязательно вставь Spintax в 3-5 местах (например: {Забирай|Получай|Держи} бонус).
+    4. Если в оригинале были макросы {first_name}, {username} или {attempts}, обязательно оставь их в тексте без изменений.
+    5. Выдай только готовый текст, без вступительных слов.
+    """
+    
+    try:
+        response = await asyncio.to_thread(
+            client.models.generate_content, 
+            model=MODEL_NAME, 
+            contents=[system_instruction, "Черновик менеджера: " + payload.prompt]
+        )
+        if response and response.text:
+            return {"status": "ok", "text": response.text.strip()}
+        return {"status": "error", "message": "Пустой ответ от нейросети"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # ---------- Удаление пользователей (одиночное и массовое) ----------
 @app.post("/delete_user")
