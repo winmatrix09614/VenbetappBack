@@ -2,7 +2,7 @@
 {% block title %}Пользователи{% endblock %}
 {% block content %}
 <div class="container-fluid px-0">
-    <h2 class="mb-4">👥 Управление пользователями</h2>
+    <h2 class="mb-4"><i class="bi bi-people-fill text-primary me-2"></i> Управление пользователями</h2>
     
     <div class="row mb-4">
         <div class="col-md-3">
@@ -43,7 +43,7 @@
         <div class="col-md-8">
             <div class="card h-100 shadow-sm border-0 rounded-4 bg-body-inner">
                 <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 pb-0">
-                    <h6 class="mb-0 fw-bold">📈 Динамика платформы</h6>
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-graph-up-arrow text-success me-2"></i> Динамика платформы</h6>
                     <div class="d-flex align-items-center gap-2">
                         <input type="date" id="startDate" class="form-control form-control-sm bg-light border-0 text-secondary" style="width: 120px;">
                         <span class="text-muted small">-</span>
@@ -60,13 +60,13 @@
         <div class="col-md-4">
             <div class="card h-100 shadow-sm border-0 rounded-4 bg-body-inner"> 
                 <div class="card-header bg-transparent border-0 pt-3 pb-0">
-                    <h6 class="mb-0 fw-bold text-body">🎯 Конверсия (за период)</h6>
+                    <h6 class="mb-0 fw-bold text-body"><i class="bi bi-bullseye text-danger me-2"></i> Конверсия (за период)</h6>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-danger p-3 mb-4 rounded-4 border-0 border-start border-danger border-4">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="fw-bold mb-1 text-danger"><i class="bi bi-ghost text-danger"></i> Мертвые души</h6>
+                                <h6 class="fw-bold mb-1 text-danger"><i class="bi bi-person-x-fill text-danger me-1"></i> Мертвые души</h6>
                                 <div class="small opacity-75 text-body" style="font-size: 12px;">Активированы, но не заходили > 3 дней</div>
                             </div>
                             <span id="deadSoulsCount" class="fs-3 fw-bold text-danger">0</span>
@@ -89,7 +89,7 @@
     </div>
 
     <div class="card mb-4 shadow-sm border-0 bg-body-inner">
-        <div class="card-header bg-transparent fw-bold text-body">🔍 Расширенный фильтр</div>
+        <div class="card-header bg-transparent fw-bold text-body"><i class="bi bi-funnel-fill text-info me-2"></i> Расширенный фильтр</div>
         <div class="card-body">
             <form method="get" id="filterForm">
                 <div class="row">
@@ -410,20 +410,22 @@
         
         <label class="form-label fw-bold small">Имя источника бота (Username):</label>
         <div class="input-group mb-3">
-            <span class="input-group-text bg-light">@</span>
-            <input type="text" id="botUsername" class="form-control" placeholder="your_bot_username" value="VenbetApp_bot">
+            <span class="input-group-text bg-body-secondary border-secondary-subtle">@</span>
+            <input type="text" id="botUsername" class="form-control bg-body-tertiary border-secondary-subtle text-body" placeholder="your_bot_username" value="VenbetApp_bot">
         </div>
 
         <label class="form-label fw-bold small">Название кампании (Source):</label>
         <div class="input-group mb-4">
-            <span class="input-group-text bg-light">?start=</span>
-            <input type="text" id="campaignName" class="form-control" placeholder="например: tiktok_ad_1" oninput="generateLink()">
+            <span class="input-group-text bg-body-secondary border-secondary-subtle">?start=</span>
+            <input type="text" id="campaignName" class="form-control bg-body-tertiary border-secondary-subtle text-body" placeholder="например: tiktok_ad_1" oninput="generateLink()">
         </div>
 
-        <div class="p-3 bg-light border rounded-3 text-center position-relative">
+        <div class="p-3 bg-body-secondary border border-secondary-subtle rounded-4 text-center position-relative">
             <div class="small text-muted mb-1">Готовая ссылка:</div>
             <code id="resultLink" class="fs-6 text-primary fw-bold" style="word-break: break-all;">https://t.me/VenbetApp_bot</code>
-            <button class="btn btn-sm btn-success mt-3 w-100 fw-bold" onclick="copyLink()">📋 Скопировать ссылку</button>
+            <button class="btn btn-sm btn-light mt-3 w-100 fw-bold text-dark rounded-3" onclick="copyLink()">
+                <i class="bi bi-copy me-1"></i> Скопировать ссылку
+            </button>
         </div>
       </div>
     </div>

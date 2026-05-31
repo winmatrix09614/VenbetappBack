@@ -66,8 +66,10 @@
         if (newCpa === null) return; 
         
         newCpa = newCpa.replace(',', '.');
-        if (isNaN(newCpa) || newCpa.trim() === '') {
-            alert('Пожалуйста, введите корректное число!');
+        
+        // Разрешаем ввод 0 для сброса значения
+        if (newCpa.trim() === '' || isNaN(newCpa)) {
+            alert('Пожалуйста, введите корректное число! (Для сброса введите 0)');
             return;
         }
 

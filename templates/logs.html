@@ -17,9 +17,49 @@
 <div class="table-responsive">
     <table class="table table-bordered table-hover">
         <thead class="table-dark"><tr><th>Дата</th><th>ID пользователя</th><th>Матч</th><th>Прогноз</th><th>Уверенность</th><th>Доп. исходы</th><th>Текст ответа</th></tr></thead>
-        <tbody>{% for log in logs %}<tr><td>{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ log.user_id }}</td><td>{{ log.match_description }}</td><td>{{ log.winner }}</td><td>{{ log.confidence }}%</td><td>{{ log.additional_predictions or '-' }}</td><td>{{ log.prediction_text[:150] }}...</td></tr>{% endfor %}</tbody>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td class="text-nowrap">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td><span class="badge bg-secondary">#{{ log.user_id }}</span></td>
+                <td class="fw-bold">{{ log.match_description }}</td>
+                <td>{{ log.winner }}</td>
+                <td><span class="text-success fw-bold">{{ log.confidence }}%</span></td>
+                <td style="font-size: 0.85rem;" class="text-muted">{{ log.additional_predictions or '-' }}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-info d-flex align-items-center" 
+                            onclick="showTextModal(`{{ log.prediction_text | replace('`', '\\`') }}`)">
+                        <i class="bi bi-card-text me-2"></i> Читать
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
 </div>
 <nav><ul class="pagination justify-content-end">{% if page > 1 %}<li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}">Назад</a></li>{% endif %}{% for p in range(1, total_pages+1) %}<li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}">{{ p }}</a></li>{% endfor %}{% if page < total_pages %}<li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}">Вперёд</a></li>{% endif %}</ul></nav>
+<div class="modal fade" id="textModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg bg-body-inner rounded-4">
+            <div class="modal-header border-bottom border-secondary-subtle">
+                <h5 class="modal-title fw-bold"><i class="bi bi-robot text-primary me-2"></i>Полный AI Анализ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="fullPredictionText" style="white-space: pre-wrap; font-size: 15px; line-height: 1.6;" class="text-body"></div>
+            </div>
+            <div class="modal-footer border-top border-secondary-subtle">
+                <button type="button" class="btn btn-secondary rounded-3" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showTextModal(text) {
+        document.getElementById('fullPredictionText').textContent = text;
+        new bootstrap.Modal(document.getElementById('textModal')).show();
+    }
+</script>
 {% endblock %}
     
