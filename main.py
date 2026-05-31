@@ -14,6 +14,8 @@ from urllib.parse import parse_qsl
 from datetime import datetime, timedelta
 from collections import OrderedDict
 from io import StringIO
+import shutil
+import uuid
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -57,6 +59,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramForbiddenError
+from aiogram.types import FSInputFile
 
 # ---- Pydantic для валидации ----
 from pydantic import BaseModel
@@ -1485,26 +1488,51 @@ def process_message_text(text: str, user) -> str:
     
     return text
 
-# 2. Фоновая задача для безопасной рассылки
-async def run_broadcast_task(user_ids: list, text: str, msg_type: str, delay: float, staff_id: int):
+# 2. Фоновая задача для безопасной рассылки с поддержкой медиа
+async def run_broadcast_task(user_ids: list, text: str, msg_type: str, delay: float, staff_id: int, file_path: str = None):
     db = SessionLocal()
     try:
-        # Берем только выбранных юзеров, у которых есть Telegram ID и нет бана
         users_to_send = db.query(User).filter(User.id.in_(user_ids), User.telegram_id.isnot(None), User.is_banned == False).all()
         success_count = 0
         
+        # Переменная для сохранения ID файла в Telegram, чтобы не грузить файл 1000 раз
+        cached_file_id = None
+        
         for u in users_to_send:
-            final_text = process_message_text(text, u)
+            final_text = process_message_text(text, u) if text else ""
             try:
                 if msg_type == "text":
                     await bot.send_message(u.telegram_id, final_text, parse_mode="HTML")
-                # (Тут позже добавим отправку фото/видео/кружочков)
-                
+                else:
+                    # Если файл уже отправлен первому юзеру, берем file_id. Иначе берем файл с диска сервера.
+                    media_to_send = cached_file_id if cached_file_id else FSInputFile(file_path)
+                    sent_msg = None
+                    
+                    if msg_type == "media":
+                        if file_path.lower().endswith(('.mp4', '.avi', '.mov')):
+                            sent_msg = await bot.send_video(u.telegram_id, video=media_to_send, caption=final_text, parse_mode="HTML")
+                            if not cached_file_id: cached_file_id = sent_msg.video.file_id
+                        else:
+                            sent_msg = await bot.send_photo(u.telegram_id, photo=media_to_send, caption=final_text, parse_mode="HTML")
+                            if not cached_file_id: cached_file_id = sent_msg.photo[-1].file_id
+                            
+                    elif msg_type == "video_note":
+                        sent_msg = await bot.send_video_note(u.telegram_id, video_note=media_to_send)
+                        if not cached_file_id: cached_file_id = sent_msg.video_note.file_id
+                        # Кружочки не поддерживают текст внутри себя, поэтому шлем текст отдельным сообщением
+                        if final_text:
+                            await bot.send_message(u.telegram_id, final_text, parse_mode="HTML")
+                            
+                    elif msg_type == "voice":
+                        sent_msg = await bot.send_voice(u.telegram_id, voice=media_to_send, caption=final_text, parse_mode="HTML")
+                        if not cached_file_id: cached_file_id = sent_msg.voice.file_id
+                        
                 success_count += 1
                 
-                # Безопасная задержка (Турбо-режим = 0.05 сек)
+                # Безопасная задержка
                 sleep_time = delay if delay > 0 else 0.05
                 await asyncio.sleep(sleep_time) 
+                
             except TelegramForbiddenError:
                 u.is_blocked_bot = True
                 u.is_active = False
@@ -1512,15 +1540,20 @@ async def run_broadcast_task(user_ids: list, text: str, msg_type: str, delay: fl
                 print(f"[BROADCAST ERROR] User {u.id}: {e}")
                 
         db.commit() 
-        
-        broadcast_record = BroadcastLog(staff_id=staff_id, segment="manual_selection", text=text, sent_count=success_count)
+        broadcast_record = BroadcastLog(staff_id=staff_id, segment="manual_selection", text=f"[{msg_type.upper()}] {text}", sent_count=success_count)
         db.add(broadcast_record)
-        log = StaffLog(staff_id=staff_id, action=f"PRO broadcast sent to {success_count} users")
+        log = StaffLog(staff_id=staff_id, action=f"PRO broadcast ({msg_type}) sent to {success_count} users")
         db.add(log)
         db.commit()
-        print(f"✅ Рассылка завершена. Успешно: {success_count}/{len(users_to_send)}")
+        print(f"✅ Рассылка {msg_type} завершена. Успешно: {success_count}/{len(users_to_send)}")
     finally:
         db.close()
+        # После окончания рассылки удаляем файл с сервера, чтобы не забивать память
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except:
+                pass
 
 # Эндпоинт "История рассылок"
 @app.get("/broadcasts", response_class=HTMLResponse)
@@ -1530,23 +1563,39 @@ async def broadcast_logs_page(request: Request, db: Session = Depends(get_db)):
     logs = db.query(BroadcastLog).options(joinedload(BroadcastLog.staff)).order_by(BroadcastLog.created_at.desc()).limit(50).all()
     return templates.TemplateResponse("broadcast_logs.html", {"request": request, "logs": logs, "staff_role": staff.role})
 
-class ProBroadcastRequest(BaseModel):
-    user_ids: list[int]
-    text: str
-    type: str = "text"
-    delay: float = 0.0
-
-# 3. Эндпоинт запуска рассылки
+# 3. Эндпоинт запуска рассылки (Теперь принимает FormData с файлом)
 @app.post("/api/pro_broadcast")
-async def api_pro_broadcast(payload: ProBroadcastRequest, request: Request, db: Session = Depends(get_db)):
+async def api_pro_broadcast(
+    request: Request, 
+    user_ids: str = Form(...), 
+    text: str = Form(""), 
+    type: str = Form("text"), 
+    delay: float = Form(0.0), 
+    media_file: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
     staff = await get_current_staff(request, db)
     if not staff: raise HTTPException(status_code=401)
     if staff.role == "buyer": raise HTTPException(status_code=403, detail="У баеров нет прав на рассылку")
     
-    # Запускаем в фоне, чтобы интерфейс не зависал
-    asyncio.create_task(run_broadcast_task(payload.user_ids, payload.text, payload.type, payload.delay, staff.id))
+    try:
+        u_ids = json.loads(user_ids)
+    except:
+        return {"status": "error", "message": "Неверный формат ID пользователей"}
+    
+    file_path = None
+    if type != "text" and media_file:
+        os.makedirs("uploads", exist_ok=True)
+        # Генерируем уникальное имя файла, чтобы избежать конфликтов при 2+ одновременных рассылках
+        ext = media_file.filename.split('.')[-1]
+        file_path = f"uploads/{uuid.uuid4().hex}.{ext}"
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(media_file.file, buffer)
+            
+    # Запускаем в фоне
+    asyncio.create_task(run_broadcast_task(u_ids, text, type, delay, staff.id, file_path))
     return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
-
+    
 class AIGenerateRequest(BaseModel):
     prompt: str
 

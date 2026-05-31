@@ -643,15 +643,18 @@
         }
     }
 
-    // --- 1. ЗАПУСК РАССЫЛКИ ---
+    // --- 1. ЗАПУСК РАССЫЛКИ (С поддержкой медиа) ---
     async function startProBroadcast() {
         const userIds = getSelectedIds();
         const text = document.getElementById('broadcastText').value.trim();
         const type = document.getElementById('messageTypeSelect').value;
         const delay = parseFloat(document.getElementById('delaySlider').value);
+        const fileInput = document.getElementById('pushMedia');
         
         if (userIds.length === 0) return alert("Аудитория пуста. Выберите пользователей в таблице.");
         if (type === 'text' && !text) return alert("Введите текст сообщения!");
+        if (type !== 'text' && (!fileInput.files || fileInput.files.length === 0)) return alert("Прикрепите файл для рассылки!");
+        
         if (!confirm(`Запустить фоновую рассылку для ${userIds.length} пользователей?`)) return;
         
         // Меняем кнопку на загрузку
@@ -660,19 +663,31 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Запуск...';
         btn.disabled = true;
 
+        // Упаковываем данные и файл в формат multipart/form-data
+        const formData = new FormData();
+        formData.append('user_ids', JSON.stringify(userIds));
+        formData.append('text', text);
+        formData.append('type', type);
+        formData.append('delay', delay);
+        if (type !== 'text' && fileInput.files[0]) {
+            formData.append('media_file', fileInput.files[0]);
+        }
+
         try {
             const res = await fetch('/api/pro_broadcast', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_ids: userIds, text: text, type: type, delay: delay })
+                body: formData // ВАЖНО: При отправке FormData браузер сам прописывает правильные заголовки
             });
             const data = await res.json();
             
             if (data.status === 'ok') {
                 alert("🚀 Рассылка успешно отправлена в фоновую очередь сервера!");
-                // Закрываем панель и снимаем галочки
                 bootstrap.Offcanvas.getInstance(document.getElementById('proBroadcastCanvas')).hide();
                 clearSelection(); 
+                
+                // Очищаем форму от старого файла
+                fileInput.value = "";
+                document.getElementById('mediaFileName').innerText = "Нажмите, чтобы выбрать файл";
             } else {
                 alert("Ошибка: " + data.message);
             }
