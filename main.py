@@ -1468,14 +1468,41 @@ async def mass_ban(request: Request, data: dict, db: Session = Depends(get_db)):
 
 # 1. Движок Spintax и Макросов
 def process_message_text(text: str, user) -> str:
-    # Обработка Spintax: {Вариант1|Вариант2|Вариант3}
+    if not text:
+        return ""
+        
+    # 1. СНАЧАЛА ОБРАБАТЫВАЕМ МАКРОСЫ (чтобы Spintax не съел их скобки)
+    
+    # Пытаемся достать имя. В Telegram это 'full_name' (Имя + Фамилия). Берем только первое слово (Имя).
+    f_name = "друг"
+    if getattr(user, 'full_name', None):
+        f_name = str(user.full_name).split()[0]
+    elif getattr(user, 'username', None):
+        f_name = str(user.username)
+        
+    username_macro = f"@{user.username}" if getattr(user, 'username', None) else "друг"
+    
+    text = text.replace("{first_name}", f_name)
+    text = text.replace("{username}", username_macro)
+    text = text.replace("{user_id}", str(user.id))
+    text = text.replace("{attempts}", str(getattr(user, 'attempts_left', 0)))
+    
+    # 2. ПОТОМ ОБРАБАТЫВАЕМ SPINTAX: {Вариант1|Вариант2}
     pattern = re.compile(r'\{([^{}]+)\}')
     def replacer(match):
-        options = match.group(1).split('|')
+        content = match.group(1)
+        # Если внутри нет разделителя '|', значит это случайные скобки текста, не трогаем их
+        if '|' not in content:
+            return f"{{{content}}}"
+        
+        options = content.split('|')
         return random.choice(options)
     
+    # Крутим цикл, пока в тексте есть валидный Spintax (поддерживает вложенность)
     while pattern.search(text):
         text = pattern.sub(replacer, text)
+        
+    return text
         
     # Обработка макросов (переменных)
     first_name = getattr(user, 'first_name', '') or "друг"
