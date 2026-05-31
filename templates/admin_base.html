@@ -110,10 +110,20 @@ input[type="number"] {
     -moz-appearance: textfield; /* Для Firefox */
 }
 
-/* 2. Лечим вылезающие острые углы у всех закругленных таблиц */
-.table-responsive.rounded-4,
-.table-responsive.rounded-3 {
-    overflow: hidden !important;
+/* 2. Лечим вылезающие острые углы у ВСЕХ таблиц глобально */
+.table-responsive {
+    border-radius: 16px !important; /* Жестко задаем радиус как у карточек */
+    overflow: hidden !important;    /* Обрезаем всё, что вылезает за радиус */
+    border: 1px solid var(--venbet-border) !important; /* Аккуратная внешняя рамка */
+}
+
+/* Убираем внутренние конфликты рамок самой таблицы */
+.table-responsive .table {
+    margin-bottom: 0 !important; 
+    border: none !important; 
+}
+.table-responsive .table th {
+    border-top: none !important;
 }
     </style>
 </head>
