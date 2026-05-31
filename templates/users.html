@@ -2,38 +2,58 @@
 {% block title %}Пользователи{% endblock %}
 {% block content %}
 <div class="container-fluid px-0">
-    <h2 class="mb-4"><i class="bi bi-people-fill text-primary me-2"></i> Управление пользователями</h2>
+    <h2 class="mb-4 fw-bold"><i class="bi bi-people-fill text-primary me-2"></i> Управление пользователями</h2>
     
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card border-0 border-start border-primary border-4 shadow-sm bg-body-inner">
-                <div class="card-body py-3">
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Всего пользователей</h6>
-                    <p class="card-text display-6 fw-bold mb-0 text-body">{{ total_users }}</p>
+            <div class="card border-0 shadow-sm p-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted small fw-bold text-uppercase mb-1">Всего юзеров</h6>
+                        <p class="card-text display-6 fw-bold mb-0 text-white">{{ total_users }}</p>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-4">
+                        <i class="bi bi-person text-primary fs-3"></i>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 border-start border-success border-4 shadow-sm bg-body-inner">
-                <div class="card-body py-3">
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Активные лиды</h6>
-                    <p class="card-text display-6 fw-bold mb-0 text-success">{{ active_users }}</p>
+            <div class="card border-0 shadow-sm p-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted small fw-bold text-uppercase mb-1">Активные (Approve)</h6>
+                        <p class="card-text display-6 fw-bold mb-0 text-success">{{ active_users }}</p>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-3 rounded-4">
+                        <i class="bi bi-check2-circle text-success fs-3"></i>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 border-start border-warning border-4 shadow-sm bg-body-inner">
-                <div class="card-body py-3">
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Премиум статус</h6>
-                    <p class="card-text display-6 fw-bold mb-0 text-warning">{{ premium_users }}</p>
+            <div class="card border-0 shadow-sm p-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted small fw-bold text-uppercase mb-1">Премиум статус</h6>
+                        <p class="card-text display-6 fw-bold mb-0 text-warning">{{ premium_users }}</p>
+                    </div>
+                    <div class="bg-warning bg-opacity-10 p-3 rounded-4">
+                        <i class="bi bi-star-fill text-warning fs-3"></i>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 border-start border-info border-4 shadow-sm bg-body-inner">
-                <div class="card-body py-3">
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Прогнозы (24ч)</h6>
-                    <p class="card-text display-6 fw-bold mb-0 text-info">{{ predictions_today }}</p>
+            <div class="card border-0 shadow-sm p-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted small fw-bold text-uppercase mb-1">Прогнозы (24ч)</h6>
+                        <p class="card-text display-6 fw-bold mb-0 text-info">{{ predictions_today }}</p>
+                    </div>
+                    <div class="bg-info bg-opacity-10 p-3 rounded-4">
+                        <i class="bi bi-activity text-info fs-3"></i>
+                    </div>
                 </div>
             </div>
         </div>
@@ -41,14 +61,14 @@
     
     <div class="row mb-4">
         <div class="col-md-8">
-            <div class="card h-100 shadow-sm border-0 rounded-4 bg-body-inner">
-                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 pb-0">
-                    <h6 class="mb-0 fw-bold"><i class="bi bi-graph-up-arrow text-success me-2"></i> Динамика платформы</h6>
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center pt-4 pb-2">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-graph-up text-primary me-2"></i> Динамика платформы</h6>
                     <div class="d-flex align-items-center gap-2">
-                        <input type="date" id="startDate" class="form-control form-control-sm bg-light border-0 text-secondary" style="width: 120px;">
+                        <input type="date" id="startDate" class="form-control form-control-sm" style="width: 120px;">
                         <span class="text-muted small">-</span>
-                        <input type="date" id="endDate" class="form-control form-control-sm bg-light border-0 text-secondary" style="width: 120px;">
-                        <button class="btn btn-sm btn-primary px-3 rounded-3" onclick="applyCustomDates()">Показать</button>
+                        <input type="date" id="endDate" class="form-control form-control-sm" style="width: 120px;">
+                        <button class="btn btn-sm btn-outline-secondary px-3 rounded-3" onclick="applyCustomDates()">Показать</button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -58,61 +78,58 @@
         </div>
         
         <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0 rounded-4 bg-body-inner"> 
-                <div class="card-header bg-transparent border-0 pt-3 pb-0">
-                    <h6 class="mb-0 fw-bold text-body"><i class="bi bi-bullseye text-danger me-2"></i> Конверсия (за период)</h6>
+            <div class="card h-100 shadow-sm border-0"> 
+                <div class="card-header bg-transparent pt-4 pb-2">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-funnel text-primary me-2"></i> Конверсия</h6>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-danger p-3 mb-4 rounded-4 border-0 border-start border-danger border-4">
+                    <div class="alert p-3 mb-4 rounded-4" style="background-color: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.2);">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="fw-bold mb-1 text-danger"><i class="bi bi-person-x-fill text-danger me-1"></i> Мертвые души</h6>
-                                <div class="small opacity-75 text-body" style="font-size: 12px;">Активированы, но не заходили > 3 дней</div>
+                                <h6 class="fw-bold mb-1 text-danger"><i class="bi bi-person-x-fill text-danger me-2"></i> Мертвые души</h6>
+                                <div class="small opacity-75 text-white" style="font-size: 12px;">Не заходили > 3 дней</div>
                             </div>
                             <span id="deadSoulsCount" class="fs-3 fw-bold text-danger">0</span>
                         </div>
                     </div>
                     
-                    <h6 class="text-muted small fw-bold mb-3 text-uppercase">Воронка пользователей</h6>
+                    <div class="mb-1 small d-flex justify-content-between fw-semibold text-muted"><span>Регистрации</span> <span id="funnelReg" class="text-white">0</span></div>
+                    <div class="progress mb-3 rounded-pill bg-dark" style="height: 8px;"><div id="barReg" class="progress-bar bg-primary" style="width: 100%"></div></div>
                     
-                    <div class="mb-1 small d-flex justify-content-between fw-semibold"><span>Регистрации</span> <span id="funnelReg">0</span></div>
-                    <div class="progress mb-3 rounded-pill" style="height: 12px;"><div id="barReg" class="progress-bar bg-primary" style="width: 100%"></div></div>
+                    <div class="mb-1 small d-flex justify-content-between fw-semibold text-muted"><span>Активированы</span> <span id="funnelAct" class="text-white">0</span></div>
+                    <div class="progress mb-3 rounded-pill bg-dark" style="height: 8px;"><div id="barAct" class="progress-bar bg-success" style="width: 0%"></div></div>
                     
-                    <div class="mb-1 small d-flex justify-content-between fw-semibold"><span>Активированы</span> <span id="funnelAct">0</span></div>
-                    <div class="progress mb-3 rounded-pill" style="height: 12px;"><div id="barAct" class="progress-bar bg-success" style="width: 0%"></div></div>
-                    
-                    <div class="mb-1 small d-flex justify-content-between fw-semibold"><span>Сделали прогноз</span> <span id="funnelPred">0</span></div>
-                    <div class="progress rounded-pill" style="height: 12px;"><div id="barPred" class="progress-bar bg-warning text-dark" style="width: 0%"></div></div>
+                    <div class="mb-1 small d-flex justify-content-between fw-semibold text-muted"><span>Сделали прогноз</span> <span id="funnelPred" class="text-white">0</span></div>
+                    <div class="progress rounded-pill bg-dark" style="height: 8px;"><div id="barPred" class="progress-bar bg-warning" style="width: 0%"></div></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card mb-4 shadow-sm border-0 bg-body-inner">
-        <div class="card-header bg-transparent fw-bold text-body"><i class="bi bi-funnel-fill text-info me-2"></i> Расширенный фильтр</div>
+    <div class="card mb-4 shadow-sm border-0">
+        <div class="card-header bg-transparent fw-bold pt-3 pb-2"><i class="bi bi-sliders text-primary me-2"></i> Фильтрация базы</div>
         <div class="card-body">
             <form method="get" id="filterForm">
-                <div class="row">
-                    <div class="col-md-3"><label>Поиск</label><input type="text" name="search" class="form-control" value="{{ search_query }}"></div>
-                    <div class="col-md-2"><label>Статус</label><select name="status" class="form-select"><option value="">Все</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option><option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option><option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option><option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option></select></div>
-                    <div class="col-md-2"><label>Лимит от</label><input type="number" name="limit_min" class="form-control" value="{{ limit_min }}"></div>
-                    <div class="col-md-2"><label>Лимит до</label><input type="number" name="limit_max" class="form-control" value="{{ limit_max }}"></div>
-                    <div class="col-md-3"><label>Дата регистрации</label><select name="date_filter" class="form-select"><option value="">Любая</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
+                <div class="row g-3">
+                    <div class="col-md-3"><label class="small text-muted mb-1">Поиск (ID / Имя)</label><input type="text" name="search" class="form-control" value="{{ search_query }}"></div>
+                    <div class="col-md-2"><label class="small text-muted mb-1">Статус</label><select name="status" class="form-select"><option value="">Все статусы</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активен</option><option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>Забанен</option><option value="premium" {% if status_filter == 'premium' %}selected{% endif %}>Премиум</option><option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option></select></div>
+                    <div class="col-md-2"><label class="small text-muted mb-1">Лимит от</label><input type="number" name="limit_min" class="form-control" value="{{ limit_min }}"></div>
+                    <div class="col-md-2"><label class="small text-muted mb-1">Лимит до</label><input type="number" name="limit_max" class="form-control" value="{{ limit_max }}"></div>
+                    <div class="col-md-3"><label class="small text-muted mb-1">Регистрация</label><select name="date_filter" class="form-select"><option value="">За всё время</option><option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option><option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option><option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option></select></div>
                 </div>
                 <div class="row mt-3">
                     <div class="col-md-12 d-flex justify-content-between align-items-center">
                         <div>
-                            <button type="submit" class="btn btn-primary px-4 shadow-sm">Применить фильтр</button>
+                            <button type="submit" class="btn btn-primary px-4 shadow-sm">Применить</button>
                             <a href="/dashboard" class="btn btn-outline-secondary px-3 ms-1">Сбросить</a>
                         </div>
-                        
                         <div class="dropdown">
-                            <button class="btn btn-success dropdown-toggle shadow-sm d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-download"></i> Экспорт данных
+                            <button class="btn btn-outline-light dropdown-toggle shadow-sm d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download"></i> Экспорт
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                                <li><button type="button" id="exportCsvBtn" class="dropdown-item d-flex align-items-center"><i class="bi bi-filetype-csv text-success me-2 fs-5"></i> Скачать в формате CSV</button></li>
-                                <li><button type="button" id="exportExcelBtn" class="dropdown-item d-flex align-items-center"><i class="bi bi-file-earmark-excel text-primary me-2 fs-5"></i> Скачать в формате Excel (XLSX)</button></li>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="background-color: var(--venbet-panel);">
+                                <li><button type="button" id="exportCsvBtn" class="dropdown-item text-white d-flex align-items-center"><i class="bi bi-filetype-csv text-success me-3 fs-5"></i> CSV формат</button></li>
+                                <li><button type="button" id="exportExcelBtn" class="dropdown-item text-white d-flex align-items-center"><i class="bi bi-file-earmark-excel text-primary me-3 fs-5"></i> Excel (XLSX)</button></li>
                             </ul>
                         </div>
                     </div>
@@ -121,95 +138,97 @@
         </div>
     </div>
 
-<div class="mb-3 d-flex justify-content-between align-items-center">
+    <div class="mb-3 d-flex justify-content-between align-items-center">
         <div>
             {% if staff_role in ['admin', 'manager'] %}
-            <button type="button" id="massGiveAttempts" class="btn btn-primary shadow-sm me-1"><i class="bi bi-plus-circle"></i> +5 выбранным</button>
-            <button type="button" id="massActivate" class="btn btn-success shadow-sm me-1"><i class="bi bi-check-circle"></i> Активировать</button>
-            <button type="button" id="massBan" class="btn btn-danger shadow-sm me-2"><i class="bi bi-slash-circle"></i> Забанить</button>
+            <button type="button" id="massGiveAttempts" class="btn btn-outline-primary shadow-sm me-1"><i class="bi bi-plus-circle"></i> +5 попыток</button>
+            <button type="button" id="massActivate" class="btn btn-outline-success shadow-sm me-1"><i class="bi bi-check-circle"></i> Активировать</button>
+            <button type="button" id="massBan" class="btn btn-outline-danger shadow-sm me-2"><i class="bi bi-slash-circle"></i> Забанить</button>
             
-            <button type="button" class="btn btn-warning shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#broadcastModal">
-                <i class="bi bi-megaphone-fill"></i> Рассылка (Push)
+            <button type="button" class="btn btn-warning shadow-sm fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#broadcastModal">
+                <i class="bi bi-megaphone-fill"></i> Рассылка
             </button>
             {% endif %}
         </div>
-        <button type="button" class="btn btn-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#utmModal"><i class="bi bi-link-45deg"></i> Генератор UTM</button>
+        <button type="button" class="btn btn-light shadow-sm fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#utmModal">
+            <i class="bi bi-link-45deg fs-5 align-middle"></i> Генератор UTM
+        </button>
     </div>
 
-    <div class="table-responsive shadow-sm rounded-3 bg-body">
+    <div class="table-responsive shadow-sm rounded-4 border" style="border-color: var(--venbet-border) !important;">
         <table class="table table-hover align-middle mb-0" id="usersTable">
             <thead class="table-dark">
                 <tr>
-                    <th><input type="checkbox" id="selectAll" class="form-check-input"></th>
+                    <th class="ps-3"><input type="checkbox" id="selectAll" class="form-check-input"></th>
                     <th>ID</th>
                     <th>1xBet ID</th>
                     <th>Username</th>
                     <th>Источник</th>
-                    <th>Лимит</th>
+                    <th>Баланс</th>
                     <th>Статус</th>
                     <th>Premium</th>
-                    <th class="text-end">Действия</th>
+                    <th class="text-end pe-3">Действия</th>
                 </tr>
             </thead>
             <tbody>
                 {% for u in users %}
                 <tr>
-                    <td><input type="checkbox" class="userCheckbox form-check-input" data-user-id="{{ u.id }}"></td>
+                    <td class="ps-3"><input type="checkbox" class="userCheckbox form-check-input" data-user-id="{{ u.id }}"></td>
                     <td class="text-muted small">#{{ u.id }}</td>
                     <td class="fw-bold">{{ u.bet_id }}</td>
-                    <td>{{ '@'+u.username if u.username else '-' }}</td>
-                    <td><span class="badge rounded-pill text-bg-secondary">{{ u.source or 'Organic' }}</span></td>
+                    <td class="text-muted">{{ '@'+u.username if u.username else '-' }}</td>
+                    <td><span class="badge" style="background-color: #262626; color: #a0a6b5; border: 1px solid #333;">{{ u.source or 'Organic' }}</span></td>
                     <td><span class="badge text-bg-primary fs-6">{{ u.attempts_left }}</span></td>
                     <td>
                         {% if u.is_banned %} <span class="badge text-bg-danger">Бан</span>
                         {% elif u.is_active %} <span class="badge text-bg-success">Активен</span>
-                        {% else %} <span class="badge text-bg-warning">Ожидает</span>
+                        {% else %} <span class="badge text-bg-warning text-dark">Ожидает</span>
                         {% endif %}
                     </td>
-                    <td>{{ '⭐' if u.is_premium else '—' }}</td>
+                    <td>{% if u.is_premium %}<i class="bi bi-star-fill text-warning"></i>{% else %}<span class="text-muted">—</span>{% endif %}</td>
                     
-                    <td class="text-end">
+                    <td class="text-end pe-3">
                         <div class="dropdown">
-                            <button class="btn btn-sm btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                            <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0" style="background-color: #1a1a1a;">
                                 <li>
-                                    <button class="dropdown-item open-profile d-flex align-items-center"
+                                    <button class="dropdown-item text-white open-profile d-flex align-items-center"
                                         data-id="{{ u.id }}" data-tg="{{ u.telegram_id or '—' }}" data-bet="{{ u.bet_id }}"
                                         data-username="{{ u.username or '—' }}" data-reg="{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}"
                                         data-ip="{{ u.ip_address or '—' }}" data-country="{{ u.country or '—' }}"
                                         data-os="{{ u.os_device or '—' }}" data-browser="{{ u.browser or '—' }}"
                                         data-source="{{ u.source or 'Органика' }}">
-                                        <i class="bi bi-eye text-primary me-2"></i> Профиль лида
+                                        <i class="bi bi-person-vcard text-primary me-3 fs-5"></i> Профиль лида
                                     </button>
                                 </li>
                                 
                                 {% if staff_role in ['admin', 'manager'] %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li><button class="dropdown-item give-attempts" data-id="{{ u.id }}" data-attempts="1"><i class="bi bi-plus text-success me-2"></i>Выдать +1 лимит</button></li>
-                                <li><button class="dropdown-item give-attempts" data-id="{{ u.id }}" data-attempts="5"><i class="bi bi-plus-circle text-success me-2"></i>Выдать +5 лимитов</button></li>
+                                <li><hr class="dropdown-divider" style="border-color: #333;"></li>
+                                <li><button class="dropdown-item text-white give-attempts" data-id="{{ u.id }}" data-attempts="1"><i class="bi bi-plus-circle text-success me-3 fs-5"></i>Выдать +1 лимит</button></li>
+                                <li><button class="dropdown-item text-white give-attempts" data-id="{{ u.id }}" data-attempts="5"><i class="bi bi-plus-circle-fill text-success me-3 fs-5"></i>Выдать +5 лимитов</button></li>
                                 
                                 <li>
-                                    <form method="post" action="/approve" class="px-3 py-1 d-flex align-items-center">
+                                    <form method="post" action="/approve" class="px-3 py-2 d-flex align-items-center mt-1">
                                         <input type="hidden" name="user_id" value="{{ u.id }}">
-                                        <input type="number" name="attempts" value="50" class="form-control form-control-sm me-2" style="width: 70px;">
-                                        <button type="submit" class="btn btn-sm btn-warning w-100">Активировать</button>
+                                        <input type="number" name="attempts" value="50" class="form-control form-control-sm me-2 bg-black" style="width: 70px;">
+                                        <button type="submit" class="btn btn-sm btn-success w-100 fw-bold">Аппрув</button>
                                     </form>
                                 </li>
                                 
-                                <li><hr class="dropdown-divider"></li>
+                                <li><hr class="dropdown-divider" style="border-color: #333;"></li>
                                 
                                 <li>
                                     <form method="post" action="/premium" class="m-0">
                                         <input type="hidden" name="user_id" value="{{ u.id }}">
-                                        <button type="submit" class="dropdown-item text-secondary"><i class="bi bi-star-fill text-warning me-2"></i>Дать Premium</button>
+                                        <button type="submit" class="dropdown-item text-white"><i class="bi bi-star-fill text-warning me-3 fs-5"></i>Дать Premium</button>
                                     </form>
                                 </li>
                                 <li>
                                     <form method="post" action="/ban" class="m-0">
                                         <input type="hidden" name="user_id" value="{{ u.id }}">
-                                        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-ban text-danger me-2"></i>Забанить</button>
+                                        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-slash-circle text-danger me-3 fs-5"></i>Забанить</button>
                                     </form>
                                 </li>
                                 {% endif %}
@@ -221,26 +240,27 @@
             </tbody>
         </table>
     </div>
-    <div class="row mt-3">
+    
+    <div class="row mt-4 mb-5">
         <div class="col-md-3">
-            <select id="perPageSelect" class="form-select w-auto d-inline-block">
+            <select id="perPageSelect" class="form-select form-select-sm w-auto d-inline-block">
                 <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
             </select>
-            <span>записей на странице</span>
+            <span class="small text-muted ms-2">на странице</span>
         </div>
         <div class="col-md-9">
             <nav>
-                <ul class="pagination justify-content-end">
+                <ul class="pagination pagination-sm justify-content-end mb-0">
                     {% if page > 1 %}
-                    <li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>
+                    <li class="page-item"><a class="page-link bg-black border-dark text-white" href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Назад</a></li>
                     {% endif %}
                     {% for p in range(1, total_pages+1) %}
-                    <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>
+                    <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link {% if p == page %}bg-primary border-primary text-black fw-bold{% else %}bg-black border-dark text-white{% endif %}" href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">{{ p }}</a></li>
                     {% endfor %}
                     {% if page < total_pages %}
-                    <li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>
+                    <li class="page-item"><a class="page-link bg-black border-dark text-white" href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if limit_min %}&limit_min={{ limit_min }}{% endif %}{% if limit_max %}&limit_max={{ limit_max }}{% endif %}{% if date_filter %}&date_filter={{ date_filter }}{% endif %}&per_page={{ per_page }}">Вперёд</a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -250,67 +270,67 @@
 
 <div class="modal fade" id="broadcastModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header bg-warning text-dark border-0">
-        <h5 class="modal-title fw-bold"><i class="bi bi-megaphone-fill me-2"></i> Создание PRO-рассылки</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-content">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-bold"><i class="bi bi-broadcast text-primary me-2"></i> Создание PRO-рассылки</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body p-4 bg-body-inner">
+      <div class="modal-body p-4">
 
-        <h6 class="fw-bold mb-3 text-body"><i class="bi bi-funnel text-primary"></i> 1. Фильтры аудитории</h6>
-        <div class="row g-2 mb-4">
+        <h6 class="fw-bold mb-3"><i class="bi bi-funnel text-primary me-2"></i> 1. Аудитория</h6>
+        <div class="row g-3 mb-4">
             <div class="col-md-6">
-                <label class="form-label small text-muted mb-1 fw-bold">Гео (Страна)</label>
-                <select class="form-select form-select-sm text-muted"><option>Любое Гео (В разработке)</option></select>
+                <label class="form-label small text-muted mb-1">Гео (Страна)</label>
+                <select class="form-select form-select-sm"><option>Любое Гео (В разработке)</option></select>
             </div>
             <div class="col-md-6">
-                <label class="form-label small text-muted mb-1 fw-bold">Источник (UTM)</label>
-                <select class="form-select form-select-sm text-muted"><option>Любой источник (В разработке)</option></select>
+                <label class="form-label small text-muted mb-1">Источник (UTM)</label>
+                <select class="form-select form-select-sm"><option>Любой источник (В разработке)</option></select>
             </div>
             <div class="col-md-6">
-                <label class="form-label small text-muted mb-1 fw-bold">Статус / Баланс</label>
+                <label class="form-label small text-muted mb-1">Статус / Баланс</label>
                 <select class="form-select form-select-sm" id="broadcastSegment">
-                    <option value="dead_souls">👻 Мертвые души (> 3 дней неактивны)</option>
-                    <option value="active">✅ Активные пользователи</option>
-                    <option value="pending">⏳ Ожидающие активации</option>
-                    <option value="zero_limits">❌ Баланс 0 (Закончились лимиты)</option>
-                    <option value="all">🌍 Все пользователи базы</option>
+                    <option value="dead_souls">Мертвые души (> 3 дней неактивны)</option>
+                    <option value="active">Активные пользователи</option>
+                    <option value="pending">Ожидающие активации</option>
+                    <option value="zero_limits">Баланс 0 (Закончились лимиты)</option>
+                    <option value="all">Все пользователи базы</option>
                 </select>
             </div>
             <div class="col-md-6">
-                <label class="form-label small text-muted mb-1 fw-bold">Дата регистрации</label>
+                <label class="form-label small text-muted mb-1">Дата регистрации</label>
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light">От</span><input type="date" class="form-control text-muted">
-                    <span class="input-group-text bg-light">До</span><input type="date" class="form-control text-muted">
+                    <span class="input-group-text bg-black border-secondary">От</span><input type="date" class="form-control">
+                    <span class="input-group-text bg-black border-secondary">До</span><input type="date" class="form-control">
                 </div>
             </div>
         </div>
 
-        <h6 class="fw-bold mb-3 text-body"><i class="bi bi-chat-left-text text-primary"></i> 2. Контент сообщения</h6>
+        <h6 class="fw-bold mb-3"><i class="bi bi-chat-left-text text-primary me-2"></i> 2. Сообщение</h6>
         <div class="mb-4">
-            <label class="btn btn-sm btn-outline-secondary w-100 mb-2 d-flex align-items-center justify-content-center" style="border-style: dashed; cursor: pointer;">
-                <i class="bi bi-image me-2"></i> Прикрепить изображение (Опционально)
+            <label class="btn btn-sm btn-outline-secondary w-100 mb-2 d-flex align-items-center justify-content-center" style="border-style: dashed; border-color: var(--venbet-border); cursor: pointer;">
+                <i class="bi bi-image me-2"></i> Прикрепить изображение
                 <input type="file" hidden accept="image/*" id="pushImage">
             </label>
 
-            <div class="border rounded-top p-2 bg-body-tertiary d-flex gap-1 border-bottom-0">
-                <button class="btn btn-sm btn-light border shadow-sm" onclick="insertFormat('<b>', '</b>')" title="Жирный"><i class="bi bi-type-bold"></i></button>
-                <button class="btn btn-sm btn-light border shadow-sm" onclick="insertFormat('<i>', '</i>')" title="Курсив"><i class="bi bi-type-italic"></i></button>
-                <button class="btn btn-sm btn-light border shadow-sm" onclick="insertFormat('<a href=\'URL\'>', '</a>')" title="Ссылка"><i class="bi bi-link-45deg"></i></button>
-                <span class="ms-auto text-muted small align-self-center" style="font-size: 11px;">Можно использовать макросы: {user_id}, {attempts}</span>
+            <div class="border rounded-top p-2 bg-black d-flex gap-1 border-bottom-0" style="border-color: var(--venbet-border) !important;">
+                <button class="btn btn-sm btn-outline-secondary border-0" onclick="insertFormat('<b>', '</b>')" title="Жирный"><i class="bi bi-type-bold"></i></button>
+                <button class="btn btn-sm btn-outline-secondary border-0" onclick="insertFormat('<i>', '</i>')" title="Курсив"><i class="bi bi-type-italic"></i></button>
+                <button class="btn btn-sm btn-outline-secondary border-0" onclick="insertFormat('<a href=\'URL\'>', '</a>')" title="Ссылка"><i class="bi bi-link-45deg"></i></button>
+                <span class="ms-auto text-muted small align-self-center" style="font-size: 11px;">Макросы: {user_id}, {attempts}</span>
             </div>
-            <textarea id="broadcastText" class="form-control rounded-0 rounded-bottom border" rows="5" placeholder="Например: Привет, {user_id}! Держи инсайдерскую инфу..."></textarea>
+            <textarea id="broadcastText" class="form-control rounded-0 rounded-bottom" rows="5" placeholder="Например: Привет, {user_id}! Держи инсайдерскую инфу..."></textarea>
         </div>
 
-        <h6 class="fw-bold mb-3 text-body"><i class="bi bi-clock-history text-primary"></i> 3. Время отправки</h6>
-        <div class="mb-4 bg-body-tertiary p-3 rounded border">
+        <h6 class="fw-bold mb-3"><i class="bi bi-clock-history text-primary me-2"></i> 3. Отправка</h6>
+        <div class="mb-4 bg-black p-3 rounded-3 border" style="border-color: var(--venbet-border) !important;">
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="sendTime" id="sendNow" value="now" checked onchange="toggleSchedule(false)">
-                <label class="form-check-label fw-bold" for="sendNow">Отправить прямо сейчас</label>
+                <label class="form-check-label fw-bold" for="sendNow">Отправить сейчас</label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="sendTime" id="sendLater" value="later" onchange="toggleSchedule(true)">
-                <label class="form-check-label fw-bold" for="sendLater">Запланировать отправку</label>
+                <label class="form-check-label fw-bold" for="sendLater">Запланировать</label>
             </div>
             
             <div id="scheduleOptions" class="mt-3 d-none">
@@ -318,113 +338,45 @@
                     <div class="col-md-5">
                         <input type="datetime-local" class="form-control form-control-sm" id="scheduleDate">
                     </div>
-                    <div class="col-md-7 text-muted" style="font-size: 11px;">
-                        <i class="bi bi-info-circle text-primary"></i> Время указано по вашему локальному часовому поясу
-                    </div>
                 </div>
             </div>
         </div>
 
-        <button class="btn btn-warning w-100 fw-bold shadow-sm py-2 fs-5" onclick="sendBroadcast()" id="btnSendBroadcast">
-            <i class="bi bi-send-fill me-2"></i> Запустить рассылку
+        <button class="btn btn-primary w-100 fw-bold shadow-sm py-2 fs-5" onclick="sendBroadcast()" id="btnSendBroadcast">
+            <i class="bi bi-send-fill me-2"></i> Запустить
         </button>
       </div>
     </div>
   </div>
 </div>
 
-<script>
-    // Функция для умной вставки тегов (жирный, курсив)
-    function insertFormat(startTag, endTag) {
-        const textarea = document.getElementById('broadcastText');
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const before = text.substring(0, start);
-        const selected = text.substring(start, end);
-        const after = text.substring(end, text.length);
-
-        textarea.value = before + startTag + selected + endTag + after;
-        textarea.focus();
-        
-        // Ставим курсор между тегами, если текст не был выделен
-        if (selected.length === 0) {
-            textarea.selectionStart = textarea.selectionEnd = start + startTag.length;
-        } else {
-            textarea.selectionStart = textarea.selectionEnd = start + startTag.length + selected.length + endTag.length;
-        }
-    }
-
-    // Показать/Скрыть календарь отложенной отправки
-    function toggleSchedule(show) {
-        const panel = document.getElementById('scheduleOptions');
-        if (show) panel.classList.remove('d-none');
-        else panel.classList.add('d-none');
-    }
-
-    // Отправка (пока обрабатывает только сегмент и текст на готовый бэкенд)
-    function sendBroadcast() {
-        const segment = document.getElementById('broadcastSegment').value;
-        const text = document.getElementById('broadcastText').value.trim();
-        const btn = document.getElementById('btnSendBroadcast');
-        
-        if (!text) return alert("Введите текст сообщения!");
-        if (!confirm("Запустить рассылку?")) return;
-        
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Обработка...';
-        
-        // В будущем сюда добавится сбор данных о картинке (FormData) и времени (scheduleDate)
-        fetch('/api/broadcast', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ segment: segment, text: text })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if(data.status === 'ok') {
-                alert("Рассылка успешно запущена!");
-                bootstrap.Modal.getInstance(document.getElementById('broadcastModal')).hide();
-                document.getElementById('broadcastText').value = '';
-            } else {
-                alert("Ошибка: " + data.message);
-            }
-        })
-        .catch(e => alert("Ошибка сети"))
-        .finally(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-send-fill me-2"></i> Запустить рассылку';
-        });
-    }
-</script>
-
 <div class="modal fade" id="utmModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header bg-dark text-white border-0">
-        <h5 class="modal-title">🔗 Генератор реферальных ссылок</h5>
+    <div class="modal-content">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-bold"><i class="bi bi-link-45deg text-primary fs-3 align-middle me-2"></i> Генератор ссылок</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body p-4">
-        <p class="text-muted small mb-3">Создайте уникальную ссылку для рекламы. Все пользователи, запустившие бота по этой ссылке, будут помечены выбранным источником.</p>
+        <p class="text-muted small mb-4">Создайте реферальную ссылку. Все юзеры, запустившие бота по ней, будут закреплены за этой кампанией.</p>
         
-        <label class="form-label fw-bold small">Имя источника бота (Username):</label>
-        <div class="input-group mb-3">
-            <span class="input-group-text bg-body-secondary border-secondary-subtle">@</span>
-            <input type="text" id="botUsername" class="form-control bg-body-tertiary border-secondary-subtle text-body" placeholder="your_bot_username" value="VenbetApp_bot">
+        <label class="form-label fw-bold small text-white">Имя бота (Username):</label>
+        <div class="input-group mb-3 shadow-sm">
+            <span class="input-group-text bg-black border-secondary-subtle">@</span>
+            <input type="text" id="botUsername" class="form-control" placeholder="your_bot_username" value="VenbetApp_bot">
         </div>
 
-        <label class="form-label fw-bold small">Название кампании (Source):</label>
-        <div class="input-group mb-4">
-            <span class="input-group-text bg-body-secondary border-secondary-subtle">?start=</span>
-            <input type="text" id="campaignName" class="form-control bg-body-tertiary border-secondary-subtle text-body" placeholder="например: tiktok_ad_1" oninput="generateLink()">
+        <label class="form-label fw-bold small text-white">Название кампании (Source):</label>
+        <div class="input-group mb-4 shadow-sm">
+            <span class="input-group-text bg-black border-secondary-subtle">?start=</span>
+            <input type="text" id="campaignName" class="form-control" placeholder="Например: tiktok_ad_1" oninput="generateLink()">
         </div>
 
-        <div class="p-3 bg-body-secondary border border-secondary-subtle rounded-4 text-center position-relative">
-            <div class="small text-muted mb-1">Готовая ссылка:</div>
-            <code id="resultLink" class="fs-6 text-primary fw-bold" style="word-break: break-all;">https://t.me/VenbetApp_bot</code>
-            <button class="btn btn-sm btn-light mt-3 w-100 fw-bold text-dark rounded-3" onclick="copyLink()">
-                <i class="bi bi-copy me-1"></i> Скопировать ссылку
+        <div class="p-4 rounded-4 text-center border" style="background-color: #000000; border-color: var(--venbet-border) !important;">
+            <div class="small text-muted mb-2 text-uppercase fw-bold" style="letter-spacing: 1px;">Готовая ссылка</div>
+            <code id="resultLink" class="fs-5 text-primary fw-bold d-block mb-3" style="word-break: break-all;">https://t.me/VenbetApp_bot</code>
+            <button class="btn btn-light w-100 fw-bold rounded-3 py-2 text-dark" onclick="copyLink()">
+                <i class="bi bi-copy me-2"></i> Скопировать
             </button>
         </div>
       </div>
@@ -433,26 +385,27 @@
 </div>
 
 <style>
-    .tracker-offcanvas { background-color: #1a1e29; color: #a0a6b5; border-left: 1px solid #2d3343; width: 450px; }
-    .tracker-header { background-color: #141720; border-bottom: 1px solid #2d3343; }
-    .tracker-title-section { font-size: 11px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 15px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; }
+    /* Стили профиля лида сбоку */
+    .tracker-offcanvas { background-color: var(--venbet-panel); color: var(--venbet-muted); border-left: 1px solid var(--venbet-border); width: 450px; }
+    .tracker-header { background-color: var(--venbet-bg); border-bottom: 1px solid var(--venbet-border); }
+    .tracker-title-section { font-size: 11px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 15px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--venbet-border); padding-bottom: 5px; }
     .tracker-field { margin-bottom: 12px; }
-    .tracker-label { font-size: 10px; font-weight: 700; color: #ffffff; text-transform: uppercase; margin-bottom: 2px; }
-    .tracker-value { font-size: 14px; color: #8c9bb4; word-break: break-all; }
-    .tracker-value.highlight { color: #5bc0de; }
-    .tracker-history-item { border-left: 2px solid #5bc0de; padding-left: 10px; margin-bottom: 15px; background: #1f2430; padding: 10px; border-radius: 0 6px 6px 0; }
+    .tracker-label { font-size: 10px; font-weight: 700; color: #ffffff; text-transform: uppercase; margin-bottom: 2px; opacity: 0.7; }
+    .tracker-value { font-size: 14px; color: var(--venbet-text); word-break: break-all; font-weight: 500;}
+    .tracker-value.highlight { color: var(--venbet-orange); font-weight: bold;}
+    .tracker-history-item { border-left: 3px solid var(--venbet-orange); padding-left: 12px; margin-bottom: 15px; background: #000000; padding: 12px; border-radius: 0 8px 8px 0; border: 1px solid var(--venbet-border); border-left: none;}
 </style>
 
-<div class="offcanvas offcanvas-end tracker-offcanvas" tabindex="-1" id="leadProfileCanvas" aria-labelledby="leadProfileCanvasLabel">
+<div class="offcanvas offcanvas-end tracker-offcanvas" tabindex="-1" id="leadProfileCanvas">
     <div class="offcanvas-header tracker-header">
-        <h5 class="offcanvas-title fw-bold text-white" id="leadProfileCanvasLabel">
-            <span class="badge bg-primary me-2">ID: <span id="ocUserId"></span></span> Лид Трекер
+        <h5 class="offcanvas-title fw-bold text-white">
+            <i class="bi bi-person-vcard text-primary me-2"></i> Карточка лида <span class="badge bg-secondary ms-2">#<span id="ocUserId"></span></span>
         </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
     
     <div class="offcanvas-body" style="padding: 0 25px 25px 25px; overflow-y: auto;">
-        <div class="tracker-title-section">USER INFORMATION <i class="bi bi-chevron-down"></i></div>
+        <div class="tracker-title-section">USER INFO</div>
         <div class="row">
             <div class="col-6 tracker-field"><div class="tracker-label">USERNAME</div><div class="tracker-value" id="ocUsername"></div></div>
             <div class="col-6 tracker-field"><div class="tracker-label">TELEGRAM ID</div><div class="tracker-value highlight" id="ocTgId"></div></div>
@@ -460,42 +413,39 @@
             <div class="col-6 tracker-field"><div class="tracker-label">REGISTRATION</div><div class="tracker-value" id="ocRegDate"></div></div>
         </div>
 
-        <div class="tracker-title-section" style="border-top: 1px solid #2d3343; padding-top: 20px;">DEVICE & NETWORK <i class="bi bi-chevron-down"></i></div>
+        <div class="tracker-title-section mt-4">DEVICE & NETWORK</div>
         <div class="row">
             <div class="col-6 tracker-field"><div class="tracker-label">IP ADDRESS</div><div class="tracker-value highlight" id="ocIp"></div></div>
             <div class="col-6 tracker-field"><div class="tracker-label">COUNTRY</div><div class="tracker-value" id="ocCountry"></div></div>
             <div class="col-6 tracker-field"><div class="tracker-label">OS / DEVICE</div><div class="tracker-value" id="ocOs"></div></div>
-            <div class="col-12 tracker-field mt-2"><div class="tracker-label">USER-AGENT</div><div class="tracker-value" style="font-size: 11px; line-height: 1.4;" id="ocBrowser"></div></div>
+            <div class="col-12 tracker-field mt-2"><div class="tracker-label">USER-AGENT</div><div class="tracker-value text-muted" style="font-size: 11px; line-height: 1.4;" id="ocBrowser"></div></div>
         </div>
 
-        <div class="tracker-title-section" style="border-top: 1px solid #2d3343; padding-top: 20px;">TRACKER DATA (UTM) <i class="bi bi-chevron-down"></i></div>
-        <div class="tracker-field"><div class="tracker-label">RAW SOURCE (START_PARAM)</div><div class="tracker-value highlight" id="ocRawSource"></div></div>
-        <div class="row mt-2 p-3 rounded" style="background-color: #141720;">
+        <div class="tracker-title-section mt-4">TRACKER DATA</div>
+        <div class="tracker-field"><div class="tracker-label">RAW SOURCE</div><div class="tracker-value highlight" id="ocRawSource"></div></div>
+        <div class="row mt-2 p-3 rounded-3" style="background-color: #000; border: 1px solid var(--venbet-border);">
             <div class="col-6 tracker-field"><div class="tracker-label">UTM_SOURCE</div><div class="tracker-value text-white" id="ocUtmSource"></div></div>
             <div class="col-6 tracker-field"><div class="tracker-label">UTM_MEDIUM</div><div class="tracker-value" id="ocUtmMedium"></div></div>
             <div class="col-12 tracker-field mt-2 mb-0"><div class="tracker-label">CAMPAIGN_NAME</div><div class="tracker-value" id="ocUtmCampaign"></div></div>
         </div>
 
-        <div class="tracker-title-section" style="border-top: 1px solid #2d3343; padding-top: 20px;">ACTIVITY LOG <i class="bi bi-chevron-down"></i></div>
+        <div class="tracker-title-section mt-4">ACTIVITY LOG</div>
         <div id="ocHistoryList" class="mt-3"></div>
     </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // --- 1. Массовые операции и таблица ---
+    /* Весь твой рабочий JS скрипт остается без изменений, он идеален */
     document.getElementById('massGiveAttempts').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s,attempts:5})}).then(()=>location.reload());});
     document.getElementById('massActivate').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
     document.getElementById('massBan').addEventListener('click',function(){let s=[];document.querySelectorAll('.userCheckbox:checked').forEach(cb=>s.push(cb.dataset.userId));if(!s.length)return alert('Выберите пользователей');fetch('/mass_ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:s})}).then(()=>location.reload());});
     document.getElementById('exportCsvBtn').addEventListener('click',function(){window.location.href='/export_users_csv?'+new URLSearchParams({search:'{{ search_query }}',status:'{{ status_filter }}',limit_min:'{{ limit_min }}',limit_max:'{{ limit_max }}',date_filter:'{{ date_filter }}'}).toString();});
-    
-    // ЛОГИКА ДЛЯ СКАЧИВАНИЯ EXCEL:
     document.getElementById('exportExcelBtn').addEventListener('click',function(){window.location.href='/export_users_excel?'+new URLSearchParams({search:'{{ search_query }}',status:'{{ status_filter }}',limit_min:'{{ limit_min }}',limit_max:'{{ limit_max }}',date_filter:'{{ date_filter }}'}).toString();});
-
     document.querySelectorAll('.give-attempts').forEach(btn=>{btn.addEventListener('click',function(){let userId=this.dataset.id,attempts=this.dataset.attempts;fetch('/give_attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,attempts:parseInt(attempts)})}).then(()=>location.reload());});});
     document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.userCheckbox').forEach(cb=>cb.checked=this.checked);});
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
 
-    // --- 2. Генератор ссылок ---
     function generateLink() {
         const bot = document.getElementById('botUsername').value.replace('@', '').trim();
         let campaign = document.getElementById('campaignName').value.trim();
@@ -508,7 +458,6 @@
         navigator.clipboard.writeText(document.getElementById('resultLink').innerText).then(() => alert('Ссылка скопирована!'));
     }
 
-    // --- 3. Логика Карточки Профиля (Offcanvas) ---
     document.querySelectorAll('.open-profile').forEach(btn => {
         btn.addEventListener('click', async function() {
             const ds = this.dataset;
@@ -540,7 +489,7 @@
             new bootstrap.Offcanvas(offcanvasElement).show();
 
             const histContainer = document.getElementById('ocHistoryList');
-            histContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border text-info spinner-border-sm"></div></div>';
+            histContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border text-primary spinner-border-sm"></div></div>';
             
             try {
                 const res = await fetch(`/user_history?bet_id=${ds.bet}`);
@@ -559,7 +508,56 @@
         });
     });
 
-    // --- 4. Мгновенные уведомления через SSE ---
+    // Функция для умной вставки тегов
+    function insertFormat(startTag, endTag) {
+        const textarea = document.getElementById('broadcastText');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const before = text.substring(0, start);
+        const selected = text.substring(start, end);
+        const after = text.substring(end, text.length);
+        textarea.value = before + startTag + selected + endTag + after;
+        textarea.focus();
+        if (selected.length === 0) {
+            textarea.selectionStart = textarea.selectionEnd = start + startTag.length;
+        } else {
+            textarea.selectionStart = textarea.selectionEnd = start + startTag.length + selected.length + endTag.length;
+        }
+    }
+    function toggleSchedule(show) {
+        const panel = document.getElementById('scheduleOptions');
+        if (show) panel.classList.remove('d-none');
+        else panel.classList.add('d-none');
+    }
+    function sendBroadcast() {
+        const segment = document.getElementById('broadcastSegment').value;
+        const text = document.getElementById('broadcastText').value.trim();
+        const btn = document.getElementById('btnSendBroadcast');
+        if (!text) return alert("Введите текст сообщения!");
+        if (!confirm("Запустить рассылку?")) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Обработка...';
+        fetch('/api/broadcast', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ segment: segment, text: text })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'ok') {
+                alert("Рассылка успешно запущена!");
+                bootstrap.Modal.getInstance(document.getElementById('broadcastModal')).hide();
+                document.getElementById('broadcastText').value = '';
+            } else { alert("Ошибка: " + data.message); }
+        })
+        .catch(e => alert("Ошибка сети"))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send-fill me-2"></i> Запустить';
+        });
+    }
+
     (function() {
         let lastCount = Number({{ pending_count | default(0) }});
         let eventSource = null;
@@ -571,8 +569,8 @@
                 document.body.appendChild(container); return container;
             })();
             const toast = document.createElement('div');
-            toast.style.cssText = 'background-color:#28a745;color:white;border-radius:8px;padding:12px 20px;margin-top:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
-            toast.innerHTML = `<span>${message}</span><button type="button" style="background:none;border:none;color:white;font-size:20px;" onclick="this.parentElement.remove()">✖</button>`;
+            toast.style.cssText = 'background-color:#ff8c00;color:black;border-radius:12px;padding:12px 20px;margin-top:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:bold;box-shadow: 0 4px 15px rgba(255,140,0,0.3);';
+            toast.innerHTML = `<span>${message}</span><button type="button" style="background:none;border:none;color:black;font-size:20px;" onclick="this.parentElement.remove()">✖</button>`;
             toast.onclick = (e) => { if (e.target.tagName !== 'BUTTON') window.location.href = '/dashboard'; };
             toastContainer.appendChild(toast); setTimeout(() => toast.remove(), 8000);
         }
@@ -592,7 +590,6 @@
         if (window.EventSource) connectSSE();
     })();
 
-    // --- 5. Аналитика и Графики ---
     let currentChart = null;
     function applyCustomDates() {
         const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value;
@@ -619,7 +616,7 @@
 
             const ctx = document.getElementById('activityChart').getContext('2d');
             if (currentChart) currentChart.destroy();
-            const gradientBlue = ctx.createLinearGradient(0, 0, 0, 300); gradientBlue.addColorStop(0, 'rgba(13, 110, 253, 0.4)'); gradientBlue.addColorStop(1, 'rgba(13, 110, 253, 0.0)');
+            const gradientOrange = ctx.createLinearGradient(0, 0, 0, 300); gradientOrange.addColorStop(0, 'rgba(255, 140, 0, 0.4)'); gradientOrange.addColorStop(1, 'rgba(255, 140, 0, 0.0)');
             const gradientTeal = ctx.createLinearGradient(0, 0, 0, 300); gradientTeal.addColorStop(0, 'rgba(13, 202, 240, 0.4)'); gradientTeal.addColorStop(1, 'rgba(13, 202, 240, 0.0)');
             const formattedDates = data.chart.dates.map(dateStr => new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }));
 
@@ -628,14 +625,14 @@
                 data: {
                     labels: formattedDates,
                     datasets: [
-                        { label: 'Регистрации', data: data.chart.registrations, borderColor: '#0d6efd', backgroundColor: gradientBlue, borderWidth: 3, tension: 0.4, pointRadius: 0, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: '#0d6efd', pointBorderWidth: 2, fill: true },
+                        { label: 'Регистрации', data: data.chart.registrations, borderColor: '#ff8c00', backgroundColor: gradientOrange, borderWidth: 3, tension: 0.4, pointRadius: 0, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: '#ff8c00', pointBorderWidth: 2, fill: true },
                         { label: 'Прогнозы', data: data.chart.predictions, borderColor: '#0dcaf0', backgroundColor: gradientTeal, borderWidth: 3, tension: 0.4, pointRadius: 0, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: '#0dcaf0', pointBorderWidth: 2, fill: true }
                     ]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                     plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 12, usePointStyle: true } }, tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', padding: 12, cornerRadius: 8 } },
-                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0, padding: 10 }, border: { display: false }, grid: { color: '#f0f0f0', drawTicks: false } } }
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0, padding: 10 }, border: { display: false }, grid: { color: '#262626', drawTicks: false } } }
                 }
             });
         } catch(e) {}

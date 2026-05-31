@@ -1,104 +1,133 @@
 <!DOCTYPE html>
-<html lang="ru"> 
+<html lang="ru" data-bs-theme="dark"> 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Venbet CRM{% endblock %}</title>
 
     <script>
-        const savedTheme = localStorage.getItem('theme') || 'dark'; // по умолчанию темная
-        document.documentElement.setAttribute('data-bs-theme', savedTheme);
+        // Принудительно ставим темную тему при загрузке
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
     </script>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        body { transition: background-color 0.3s ease; }
-        .sidebar { background: #1a1a2e; min-height: 100vh; display: flex; flex-direction: column; }
-        .sidebar a { color: #a0a6b5; text-decoration: none; padding: 12px 15px; display: block; border-radius: 6px; margin-bottom: 5px; transition: 0.2s; }
-        .sidebar a:hover, .sidebar a.active { background: #2d3343; color: white; }
-        .content { padding: 25px; }
+        /* --- VENBET AI BRAND COLORS --- */
+        :root {
+            --venbet-orange: #ff8c00;
+            --venbet-orange-hover: #e07b00;
+            --venbet-bg: #000000;       /* Глубокий черный фон */
+            --venbet-panel: #141414;    /* Темно-серый для карточек */
+            --venbet-border: #262626;   /* Мягкие бордеры */
+            --venbet-text: #ffffff;
+            --venbet-muted: #8e8e93;
+        }
+
+        body { 
+            background-color: var(--venbet-bg) !important; 
+            color: var(--venbet-text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* Боковое меню */
+        .sidebar { 
+            background: var(--venbet-bg); 
+            border-right: 1px solid var(--venbet-border);
+            min-height: 100vh; display: flex; flex-direction: column; 
+        }
+        .sidebar a { 
+            color: var(--venbet-muted); 
+            text-decoration: none; padding: 12px 15px; 
+            display: block; border-radius: 12px; margin-bottom: 5px; transition: 0.2s; 
+            font-weight: 500;
+        }
+        .sidebar a:hover, .sidebar a.active { 
+            background: var(--venbet-panel); 
+            color: var(--venbet-orange); 
+        }
+
+        /* Основной контент */
+        .content { padding: 25px; background-color: var(--venbet-bg) !important; }
         
-        /* Стили для современного тумблера (Солнце / Луна) */
-        .theme-toggle { position: relative; display: inline-block; width: 64px; height: 32px; }
-        .theme-toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-label { 
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; 
-            background-color: #2d3343; border-radius: 32px; transition: .4s; 
-            display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        /* Переопределение кнопок */
+        .btn-primary { 
+            background-color: var(--venbet-orange) !important; 
+            border-color: var(--venbet-orange) !important; 
+            color: #000 !important; 
+            font-weight: 700; 
+            border-radius: 10px;
         }
-        .toggle-label .bi { font-size: 14px; z-index: 1; }
-        .moon-icon { color: #f1c40f; }
-        .sun-icon { color: #f39c12; }
-        .toggle-ball { 
-            position: absolute; height: 24px; width: 24px; left: 4px; bottom: 4px; 
-            background-color: white; border-radius: 50%; transition: .4s; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        .btn-primary:hover { background-color: var(--venbet-orange-hover) !important; }
+        
+        /* Карточки и модалки */
+        .card, .modal-content, .offcanvas { 
+            background-color: var(--venbet-panel) !important; 
+            border: 1px solid var(--venbet-border) !important;
+            border-radius: 16px !important;
         }
-        input:checked + .toggle-label { background-color: #0d6efd; }
-        input:checked + .toggle-label .toggle-ball { transform: translateX(32px); }
+        .card-header, .modal-header, .modal-footer {
+            border-color: var(--venbet-border) !important;
+        }
+        .bg-body-inner { background-color: var(--venbet-panel) !important; }
+
+        /* Тексты */
+        .text-primary { color: var(--venbet-orange) !important; }
+        
+        /* Инпуты */
+        .form-control, .form-select, .input-group-text { 
+            background-color: #000000 !important; 
+            border: 1px solid var(--venbet-border) !important; 
+            color: white !important; 
+            border-radius: 10px;
+        }
+        .form-control:focus, .form-select:focus { 
+            border-color: var(--venbet-orange) !important; 
+            box-shadow: 0 0 0 0.25rem rgba(255, 140, 0, 0.25) !important; 
+        }
+
+        /* Таблицы */
+        .table { color: var(--venbet-text) !important; border-color: var(--venbet-border) !important; }
+        .table-dark th { 
+            background-color: var(--venbet-panel) !important; 
+            border-bottom: 2px solid var(--venbet-border) !important; 
+            color: var(--venbet-muted);
+            font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .table-hover tbody tr:hover { background-color: #1a1a1a !important; }
+        td { border-color: var(--venbet-border) !important; }
+
+        /* Кастомный тумблер (оставил только для красоты, тема теперь жестко темная) */
+        .theme-toggle { display: none; } /* Скрыли тумблер, так как дизайн только темный */
     </style>
 </head>
 <body>
 <div class="container-fluid">
     <div class="row">
-        <div class="col-md-2 sidebar p-3 shadow-lg z-3">
-            <h4 class="text-white fw-bold mb-4 text-center">🎯 Venbet<span class="text-primary">CRM</span></h4>
+        <div class="col-md-2 sidebar p-3 z-3">
+            <h4 class="text-white fw-bold mb-4 text-center mt-2">
+                <i class="bi bi-lightning-charge-fill text-primary"></i> VENBET<span class="text-primary">CRM</span>
+            </h4>
             
-            <div class="text-muted small fw-bold mb-2 mt-3 px-2 text-uppercase">Управление</div>
-            <a href="/dashboard"><i class="bi bi-people me-2"></i> CRM (Таблица)</a>
-            <a href="/logs"><i class="bi bi-clock-history me-2"></i> Логи AI</a>
-            <a href="/broadcasts"><i class="bi bi-send-check me-2"></i> История рассылок</a>
+            <div class="text-muted small fw-bold mb-2 mt-3 px-2 text-uppercase" style="letter-spacing: 1px;">Управление</div>
+            <a href="/dashboard"><i class="bi bi-people me-2 fs-5 align-middle"></i> Пользователи</a>
+            <a href="/logs"><i class="bi bi-journal-text me-2 fs-5 align-middle"></i> Журнал сессий</a>
+            <a href="/broadcasts"><i class="bi bi-broadcast me-2 fs-5 align-middle"></i> Рассылки</a>
             
-            <div class="text-muted small fw-bold mb-2 mt-4 px-2 text-uppercase">Арбитраж</div>
-            <a href="/buyer/leads"><i class="bi bi-grid-fill me-2"></i> Панель Баера</a>
-            <a href="/admin/analytics/traffic"><i class="bi bi-bar-chart-fill me-2"></i> Воронка трафика</a>
-            <a href="/admin/analytics/cohorts"><i class="bi bi-grid-3x3-gap-fill me-2"></i> Retention (Когорты)</a>
+            <div class="text-muted small fw-bold mb-2 mt-4 px-2 text-uppercase" style="letter-spacing: 1px;">Аналитика</div>
+            <a href="/buyer/leads"><i class="bi bi-funnel me-2 fs-5 align-middle"></i> Панель Баера</a>
+            <a href="/admin/analytics/traffic"><i class="bi bi-bar-chart me-2 fs-5 align-middle"></i> Воронка трафика</a>
+            <a href="/admin/analytics/cohorts"><i class="bi bi-grid-1x2 me-2 fs-5 align-middle"></i> Когорты (LTV)</a>
             
-            <a href="/admin/logout" class="text-danger mt-auto border-top border-secondary pt-3"><i class="bi bi-box-arrow-left me-2"></i> Выйти</a>
+            <a href="/admin/logout" class="text-danger mt-auto pt-3"><i class="bi bi-box-arrow-left me-2"></i> Выйти</a>
         </div>
         
-        <div class="col-md-10 content bg-body-tertiary">
-            
-            <div class="d-flex justify-content-end mb-3">
-                <div class="theme-toggle">
-                    <input type="checkbox" id="themeSwitch" onchange="toggleTheme()">
-                    <label for="themeSwitch" class="toggle-label" title="Переключить тему">
-                        <i class="bi bi-moon-fill moon-icon"></i>
-                        <i class="bi bi-sun-fill sun-icon"></i>
-                        <span class="toggle-ball"></span>
-                    </label>
-                </div>
-            </div>
-
+        <div class="col-md-10 content">
             {% block content %}{% endblock %}
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    function setTheme(theme) {
-        document.documentElement.setAttribute('data-bs-theme', theme);
-        localStorage.setItem('theme', theme);
-        const checkbox = document.getElementById('themeSwitch');
-        if (checkbox) {
-            checkbox.checked = (theme === 'dark');
-        }
-    }
-
-    function toggleTheme() {
-        const checkbox = document.getElementById('themeSwitch');
-        setTheme(checkbox.checked ? 'dark' : 'light');
-    }
-
-    // Синхронизируем положение тумблера при загрузке DOM
-    document.addEventListener('DOMContentLoaded', () => {
-        const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
-        const checkbox = document.getElementById('themeSwitch');
-        if (checkbox) {
-            checkbox.checked = (currentTheme === 'dark');
-        }
-    });
-</script>
 </body>
 </html>
