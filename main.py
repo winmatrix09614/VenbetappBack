@@ -190,8 +190,7 @@ class BroadcastLog(Base):
 
     staff = relationship("Staff")    
 
-Base.metadata.create_all(bind=engine)
-
+# ---------- НОВАЯ ТАБЛИЦА ПЛАНИРОВЩИКА СТРОГО ЗДЕСЬ ----------
 class ScheduledBroadcast(Base):
     __tablename__ = "scheduled_broadcasts"
     id = Column(Integer, primary_key=True, index=True)
@@ -206,6 +205,8 @@ class ScheduledBroadcast(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     staff = relationship("Staff")
+
+Base.metadata.create_all(bind=engine)    
 
 # --- АВТО-МИГРАЦИЯ ДЛЯ POSTGRESQL (Этап 3 и 4) ---
 from sqlalchemy.sql import text
