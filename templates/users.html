@@ -568,17 +568,15 @@
 
     // UTM Генератор
     // UTM Генератор (Прямые ссылки для WebApp)
+    // UTM Генератор (Классические ссылки на бота)
     function generateLink() {
         const bot = document.getElementById('botUsername').value.replace('@', '').trim();
         let campaign = document.getElementById('campaignName').value.trim();
         campaign = campaign.replace(/[^a-zA-Z0-9_-]/g, '');
         document.getElementById('campaignName').value = campaign;
         
-        // ВАЖНО: Укажи здесь короткое имя твоего WebApp из BotFather (обычно это app)
-        const appShortName = "app"; 
-        
-        // Формируем Direct Mini App Link с параметром startapp
-        const link = campaign ? `https://t.me/${bot}/${appShortName}?startapp=${campaign}` : `https://t.me/${bot}/${appShortName}`;
+        // Формируем ссылку, которая ведет В ЧАТ С БОТОМ
+        const link = campaign ? `https://t.me/${bot}?start=${campaign}` : `https://t.me/${bot}`;
         
         document.getElementById('resultLink').innerText = link;
     }

@@ -710,6 +710,9 @@ async def generate_and_send_prediction(message: types.Message, team1: str, team2
         db.commit()
     db.close()
 
+# Импортируем специальный класс для кнопок WebApp (Вставь это здесь, чтобы не искать верх файла)
+from aiogram.types.web_app_info import WebAppInfo
+
 # ---------- Обработчики бота ----------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -717,13 +720,28 @@ async def cmd_start(message: types.Message, state: FSMContext):
     db = SessionLocal()
     user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
     db.close()
+    
+    # 1. Достаем UTM-метку из команды (если юзер нажал /start arab_promo)
+    parts = message.text.split(maxsplit=1)
+    args = parts[1] if len(parts) > 1 else ""
+    
+    # 2. Формируем URL с параметром для React-фронтенда
+    base_url = "https://venbetapp-production.up.railway.app/" # Твой фронтенд
+    app_url = f"{base_url}?utm_source={args}" if args else base_url
+    
+    # 3. Создаем кнопку, которая открывает WebApp с нужной ссылкой
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔥 Открыть VENBET AI", web_app=WebAppInfo(url=app_url))]
+    ])
+    
+    # 4. Отвечаем пользователю
     if user and user.is_active and not user.is_banned:
-        await message.answer(f"С возвращением! У вас осталось прогнозов: {user.attempts_left}", reply_markup=get_main_keyboard(user.attempts_left))
+        await message.answer(f"С возвращением! У вас осталось прогнозов: {user.attempts_left}\n\n👇 Запустите приложение ниже:", reply_markup=markup)
     elif user and user.is_banned:
         await message.answer("❌ Ваш аккаунт заблокирован.")
     else:
-        await state.set_state(RegistrationForm.waiting_for_bet_id)
-        await message.answer("Привет! 👋\n\nЯ нейросеть для анализа спортивных событий.\nДля использования мне нужен ваш ID 1xBet.\n\nВведите ID (только цифры):", reply_markup=ReplyKeyboardRemove())
+        # Теперь мы не просим ID в чате, а отправляем в приложение
+        await message.answer("Привет! 👋\n\nЯ нейросеть для анализа спортивных событий.\n\n👇 Запустите приложение ниже, чтобы начать:", reply_markup=markup)
 
 @dp.message(RegistrationForm.waiting_for_bet_id)
 async def process_bet_id(message: types.Message, state: FSMContext):
@@ -1665,7 +1683,7 @@ async def api_pro_broadcast(
         # Запускаем в фоне прямо сейчас
         asyncio.create_task(run_broadcast_task(u_ids, text, type, delay, staff.id, file_path))
         return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
-        
+
         # ---------- Отмена запланированной рассылки ----------
 @app.post("/api/cancel_scheduled")
 async def cancel_scheduled(request: Request, broadcast_id: int = Form(...), db: Session = Depends(get_db)):
