@@ -96,10 +96,12 @@ SKIP_THRESHOLD = 60
 
 # Поисковый запрос новостей под каждый язык (newsapi.org /everything)
 _NEWS_QUERY = {
-    "ru": "футбол OR спорт",
-    "es": "fútbol OR deporte",
-    "ar": "كرة القدم OR رياضة",
+    "ru": "футбол",
+    "es": "fútbol",
+    "ar": "كرة القدم",
 }
+# Страна для спортивных заголовков top-headlines (category=sports)
+_NEWS_COUNTRY = {"ru": "ru", "es": "mx", "ar": "ae"}
 NEWS_TTL = 1800
 
 # ---------- Кэш ----------
@@ -671,7 +673,7 @@ async def generate_prediction_text(team1, team2, data, winner, confidence, addit
 
     config = genai_types.GenerateContentConfig(
         temperature=0.75,
-        max_output_tokens=600,
+        max_output_tokens=1500,  # запас, чтобы "thinking" не съедал ответ и текст не обрывался
         top_p=0.9,
     )
 
@@ -878,22 +880,14 @@ async def fetch_sport_news(lang: str = "ru") -> list[dict]:
     if not NEWS_API_KEY:
         return []
  
-    params = {
-        "q": _NEWS_QUERY.get(lang, _NEWS_QUERY["ru"]),
-        "language": lang,
-        "sortBy": "publishedAt",
-        "pageSize": 12,
-    }
     headers = {"X-Api-Key": NEWS_API_KEY}
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as http_client:
-            r = await http_client.get("https://newsapi.org/v2/everything", params=params, headers=headers)
-            articles = r.json().get("articles", [])
-        items = []
+
+    def _parse(articles):
+        out = []
         for a in articles:
             if not a.get("title") or a.get("title") == "[Removed]":
                 continue
-            items.append({
+            out.append({
                 "title": a.get("title"),
                 "link": a.get("url"),
                 "description": a.get("description"),
@@ -901,8 +895,29 @@ async def fetch_sport_news(lang: str = "ru") -> list[dict]:
                 "pubDate": a.get("publishedAt"),
                 "source": (a.get("source") or {}).get("name"),
             })
-            if len(items) >= 10:
+            if len(out) >= 10:
                 break
+        return out
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as http_client:
+            # 1) Спортивные ЗАГОЛОВКИ по стране — это реальные спорт-новости
+            r = await http_client.get(
+                "https://newsapi.org/v2/top-headlines",
+                params={"category": "sports", "country": _NEWS_COUNTRY.get(lang, "us"), "pageSize": 15},
+                headers=headers,
+            )
+            items = _parse(r.json().get("articles", []))
+            # 2) Фолбэк: поиск спортивных ключевиков в ЗАГОЛОВКЕ
+            if not items:
+                r2 = await http_client.get(
+                    "https://newsapi.org/v2/everything",
+                    params={"q": _NEWS_QUERY.get(lang, _NEWS_QUERY["ru"]),
+                            "language": lang, "searchIn": "title",
+                            "sortBy": "publishedAt", "pageSize": 15},
+                    headers=headers,
+                )
+                items = _parse(r2.json().get("articles", []))
         news_cache[lang] = {"data": items, "ts": now}
         return items
     except Exception as e:
@@ -2132,6 +2147,12 @@ async def register_request(
         if telegram_id:
             user_by_tg = db.query(User).filter(User.telegram_id == telegram_id).first()
             if user_by_tg:
+                # Если юзер вводит ДРУГОЙ ID — это новый лид: сбрасываем аппрув и лимиты,
+                # чтобы менеджер подтверждал заново (и нельзя было крутить прогнозы под любым ID).
+                if user_by_tg.bet_id != clean_bet_id:
+                    user_by_tg.is_active = False
+                    user_by_tg.is_banned = False
+                    user_by_tg.attempts_left = 0
                 user_by_tg.bet_id = clean_bet_id
                 user_by_tg.username = username
                 user_by_tg.ip_address = ip_address
