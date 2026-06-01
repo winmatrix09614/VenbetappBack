@@ -10,6 +10,7 @@ import hmac
 import hashlib
 import io
 import urllib.request
+import re as _re
 from urllib.parse import parse_qsl
 from datetime import datetime, timedelta
 from collections import OrderedDict
@@ -535,9 +536,9 @@ async def get_advanced_match_data(team1_name: str, team2_name: str) -> dict:
             return {"t1_form": [0.5]*5, "t2_form": [0.5]*5, "t1_str": "?", "t2_str": "?", "h2h_str": "Ошибка", "t1_gs": 1, "t1_gc": 1, "t2_gs": 1, "t2_gc": 1, "h2h_t1_wins": 0, "h2h_t2_wins": 0}
 
 def calculate_prediction(data: dict) -> dict:
-    """Математический движок на базе весов каппера с динамическим пулом доп. исходов"""
+    """Детерминированный движок весов каппера + слой отображения."""
     f1_score, f2_score = sum(data['t1_form']), sum(data['t2_form'])
-    score1, score2 = 0, 0
+    score1, score2 = 0.0, 0.0
 
     # 1. Форма (15%)
     score1 += (f1_score / 5) * 15
@@ -551,106 +552,133 @@ def calculate_prediction(data: dict) -> dict:
     else:
         score1 += 12; score2 += 12
 
-    # 3. Свое поле (24% - отдаем команде 1)
-    score1 += 24
+    # 3. Своё поле (отдаём команде 1)
+    score1 += HOME_BONUS
 
-    # 4. Класс / Таблица (21% - эмуляция через разницу мячей)
+    # 4. Класс / разница мячей (21%)
     net1, net2 = data['t1_gs'] - data['t1_gc'], data['t2_gs'] - data['t2_gc']
     if net1 > net2: score1 += 21
     elif net2 > net1: score2 += 21
     else: score1 += 10.5; score2 += 10.5
 
+    total = score1 + score2 if (score1 + score2) > 0 else 1
     diff = abs(score1 - score2)
     avg_goals = (data['t1_gs'] + data['t2_gs'] + data['t1_gc'] + data['t2_gc']) / 2
 
-    import random
-    
-    # 5. Определение сценария и загрузка пула логичных исходов
-    if avg_goals < 2.0 and diff < 15:
+    # --- РЕАЛЬНАЯ уверенность фаворита: доля его очков от суммы (детерминированно) ---
+    p1 = score1 / total * 100
+    p2 = score2 / total * 100
+    real_conf = max(p1, p2)
+
+    # Стабильный генератор для аддонов (одинаковый матч → одинаковые числа)
+    seed = hash((round(score1, 1), round(score2, 1), round(avg_goals, 1)))
+    rng = random.Random(seed)
+
+    # --- Сценарий и пул логичных доп.исходов ---
+    if avg_goals < 2.0 and diff < 8:
         winner = "Ничья"
-        confidence = random.uniform(68, 76)
-        pool = [
-            "Тотал меньше (2.5)", "Тотал меньше (1.5)", "Ничья в 1 тайме", 
-            "Обе забьют: НЕТ", "Гол во 2 тайме: НЕТ", "Тотал угловых < 9.5", "Желтые карточки > 3.5"
-        ]
-        
-    elif avg_goals >= 2.8 and diff < 20:
+        pool = ["Тотал меньше (2.5)", "Тотал меньше (1.5)", "Ничья в 1 тайме",
+                "Обе забьют: НЕТ", "Тотал угловых < 9.5", "Жёлтые карточки > 3.5"]
+    elif avg_goals >= 2.8 and diff < 12:
         winner = "Тотал больше (2.5)"
-        confidence = random.uniform(78, 86)
-        pool = [
-            "Обе забьют: ДА", "Гол в 1 тайме", "Тотал больше (3.5)", 
-            "Тотал угловых > 9.5", "Гол в обоих таймах", "Удары в створ > 8.5"
-        ]
-
-    elif diff > 30:
-        winner = "team1" if score1 > score2 else "team2"
-        confidence = random.uniform(88, 94)
-        pool = [
-            "Победа с форой (-1)", "Победа с форой (-1.5)", "ИТБ фаворита (1.5)", 
-            "Гол фаворита в 1 тайме", "Фаворит забьет в обоих таймах", 
-            "Сухая победа фаворита", "Угловые фаворита > 5.5"
-        ]
-
+        pool = ["Обе забьют: ДА", "Гол в 1 тайме", "Тотал больше (3.5)",
+                "Тотал угловых > 9.5", "Гол в обоих таймах", "Удары в створ > 8.5"]
     else:
         winner = "team1" if score1 > score2 else "team2"
-        confidence = random.uniform(75, 84)
-        pool = [
-            "Тотал угловых > 8.5", "Гол во 2 тайме", "Победа в 1 мяч или ничья", 
-            "Обе забьют: ДА", "ИТБ победителя (1.0)", "Желтые карточки > 4.5"
-        ]
+        if diff > 25:
+            pool = ["Победа с форой (-1)", "ИТБ фаворита (1.5)", "Гол фаворита в 1 тайме",
+                    "Сухая победа фаворита", "Угловые фаворита > 5.5"]
+        else:
+            pool = ["Тотал угловых > 8.5", "Гол во 2 тайме", "Победа в 1 мяч или ничья",
+                    "Обе забьют: ДА", "ИТБ победителя (1.0)", "Жёлтые карточки > 4.5"]
 
-    # 6. Детектор СКИПА и генерация строки дополнительных исходов
-    if confidence < 65:
-        winner = "ПРОПУСК (Сложный матч)"
-        additional = "Слишком высокие риски. Ставить не рекомендуется."
-    else:
-        # Выбираем случайное количество исходов (от 2 до 5)
-        num_addons = random.randint(2, 5)
-        
-        # Защита: берем не больше элементов, чем есть в самом пуле
-        selected_addons = random.sample(pool, min(num_addons, len(pool)))
-        
-        # Присваиваем каждому выбранному исходу свой случайный процент (от 68% до 89%)
-        addon_strings = []
-        for addon in selected_addons:
-            addon_conf = random.randint(68, 89)
-            addon_strings.append(f"{addon} {addon_conf}%")
-        
-        # Склеиваем их через разделитель
-        additional = " | ".join(addon_strings)
+    # --- Детектор скипа по РЕАЛЬНОЙ уверенности ---
+    if real_conf < SKIP_THRESHOLD:
+        return {
+            "winner": "ПРОПУСК (Сложный матч)",
+            "confidence": round(real_conf, 1),
+            "real_confidence": round(real_conf, 1),
+            "additional": "Слишком высокие риски. Ставить не рекомендуется."
+        }
 
-    return {"winner": winner, "confidence": round(confidence, 2), "additional": additional}
+    # --- Доп.исходы: проценты привязаны к real_conf, а не из воздуха ---
+    num_addons = rng.randint(2, min(5, len(pool)))
+    selected = rng.sample(pool, num_addons)
+    addon_strings, confident_addons = [], 0
+    for addon in selected:
+        # аддон чуть ниже основного прогноза, с лёгким разбросом
+        addon_conf = int(max(68, min(90, real_conf - rng.randint(2, 12))))
+        if addon_conf >= 78:
+            confident_addons += 1
+        addon_strings.append(f"{addon} {addon_conf}%")
+    additional = " | ".join(addon_strings)
+
+    # --- Слой ОТОБРАЖЕНИЯ: буст +5..10% в зависимости от числа уверенных аддонов ---
+    boost = min(DISPLAY_BOOST_MAX, DISPLAY_BOOST_BASE + confident_addons)
+    display_conf = min(CONFIDENCE_CAP, round(real_conf) + boost)
+
+    return {
+        "winner": winner,
+        "confidence": display_conf,              # ← показываем юзеру (с бустом)
+        "real_confidence": round(real_conf, 1),  # ← пишем в логи/аналитику (честное)
+        "additional": additional
+    }
 
 async def generate_prediction_text(team1, team2, data, winner, confidence, additional):
-    prompt = f"""
-    Ты — элитный спортивный аналитик и футбольный журналист. Напиши премиальный разбор матча (7-9 предложений).
+    winner_label = {"team1": team1, "team2": team2}.get(winner, winner)
 
-    ДАННЫЕ ДЛЯ АНАЛИЗА:
-    Матч: {team1} против {team2}
-    Команда 1 ({team1}): форма {data['t1_str']}, забивает в среднем {data['t1_gs']}, пропускает {data['t1_gc']}.
-    Команда 2 ({team2}): форма {data['t2_str']}, забивает {data['t2_gs']}, пропускает {data['t2_gc']}.
-    H2H (очные встречи): {data['h2h_str']}
-    Главный прогноз: {winner}
-    Доп. исходы: {additional}
+    prompt = f"""Ты — элитный спортивный аналитик и футбольный журналист с 15-летним стажем.
+Напиши премиальный разбор матча на русском, 6–8 живых предложений, уверенным экспертным тоном.
 
-    ЖЕСТКИЕ ПРАВИЛА:
-    1. ЗАПРЕЩЕНО выдумывать травмы или отсутствующих игроков. Анализируй только стилистику, голы и H2H.
-    2. ЗАПРЕЩЕНЫ призывы (ссылки в био, пиши в ЛС).
-    3. Обоснуй логически, почему выбран {winner} и {additional}.
-    4. Не пиши проценты уверенности в тексте, только аналитика.
-    5. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать слова "алгоритм", "нейросеть", "ИИ" или писать от лица машины. Пиши от первого лица ("Мой анализ показывает...") или безлично. Ты — живой эксперт.
-    """
-    
-    # Защита от лимитов: 3 попытки с паузами
+ДАННЫЕ (опирайся ТОЛЬКО на них, не выдумывай):
+Матч: {team1} (хозяева) против {team2} (гости)
+Форма {team1}: {data['t1_str']} | забивает в среднем {data['t1_gs']:.1f}, пропускает {data['t1_gc']:.1f}
+Форма {team2}: {data['t2_str']} | забивает {data['t2_gs']:.1f}, пропускает {data['t2_gc']:.1f}
+Очные встречи (H2H): {data['h2h_str']}
+Главный прогноз: {winner_label}
+Дополнительные исходы: {additional}
+
+ПРАВИЛА:
+1. ЗАПРЕЩЕНО выдумывать травмы, дисквалификации, отсутствующих игроков, трансферы.
+   Анализируй только форму, результативность и личные встречи.
+2. ЗАПРЕЩЕНЫ призывы и реклама ("пиши в ЛС", "ссылка в био").
+3. Логически обоснуй, ПОЧЕМУ выбран «{winner_label}» — свяжи с конкретными цифрами выше.
+4. Кратко оправдай 1–2 ключевых доп.исхода.
+5. НЕ упоминай проценты уверенности в тексте.
+6. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО слово "алгоритм", "нейросеть", "ИИ", "модель".
+   Пиши от первого лица живого эксперта ("Мой анализ показывает…", "Я ожидаю…").
+
+ПРИМЕР ТОНА (только тон, не копируй содержание):
+"Хозяева подходят к матчу в отличной форме и feel себя уверенно на своём поле.
+Их результативность в атаке и солидная игра в обороне дают серьёзное преимущество…"
+"""
+
+    config = genai_types.GenerateContentConfig(
+        temperature=0.75,
+        max_output_tokens=600,
+        top_p=0.9,
+    )
+
     for attempt in range(3):
         try:
-            response = await asyncio.to_thread(client.models.generate_content, model=MODEL_NAME, contents=prompt)
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=MODEL_NAME, contents=prompt, config=config
+            )
             if response and response.text:
                 return response.text.strip()
         except Exception as e:
+            print(f"[GEMINI] prediction text attempt {attempt+1} failed: {e}")
             await asyncio.sleep(1.5)
-            
-    return "Сложный матч. Рекомендуется опираться на статистику забитых и пропущенных мячей, а также историю личных встреч."
+
+    # --- Умный fallback на основе РЕАЛЬНЫХ данных (вместо общей заглушки) ---
+    return (
+        f"Хозяева {team1} (форма {data['t1_str']}) против {team2} (форма {data['t2_str']}). "
+        f"{team1} в среднем забивает {data['t1_gs']:.1f} и пропускает {data['t1_gc']:.1f} за матч, "
+        f"у {team2} показатели {data['t2_gs']:.1f} / {data['t2_gc']:.1f}. "
+        f"История личных встреч: {data['h2h_str']}. "
+        f"С учётом этих данных мой основной прогноз — {winner_label}."
+    )
 
 async def save_prediction_log(user_id: int, match_desc: str, winner: str, confidence: float, full_text: str, additional: str = None):
     db = SessionLocal()
@@ -824,14 +852,73 @@ async def process_match_text(message: types.Message, state: FSMContext):
     await generate_and_send_prediction(message, team1, team2)
     await state.clear()
 
+    news_cache = {}  # { lang: {"data": [...], "ts": float} }
+    NEWS_TTL = 1800  # 30 минут
+ 
+async def fetch_sport_news(lang: str = "ru") -> list[dict]:
+    """Возвращает список новостей с картинками: [{title, link, image, source}]"""
+    now = asyncio.get_event_loop().time()
+    cached = news_cache.get(lang)
+    if cached and (now - cached["ts"] < NEWS_TTL):
+        return cached["data"]
+ 
+    if not NEWS_API_KEY:
+        return []
+ 
+    params = {
+        "apikey": NEWS_API_KEY,
+        "category": "sports",
+        "language": lang,        # ru / es / ar — совпадает с темами Multi-GEO
+        "image": 1,              # только с картинками
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as http_client:
+            r = await http_client.get("https://newsdata.io/api/1/latest", params=params)
+            results = r.json().get("results", [])
+        items = []
+        for a in results[:10]:
+            items.append({
+                "title": a.get("title"),
+                "link": a.get("link"),
+                "description": a.get("description"),
+                "image": a.get("image_url"),
+                "pubDate": a.get("pubDate"),
+                "source": a.get("source_id"),
+            })
+        news_cache[lang] = {"data": items, "ts": now}
+        return items
+    except Exception as e:
+        print(f"[NEWS] error: {e}")
+        return []
+
 @dp.message(F.text == "📰 Новости")
 async def news(message: types.Message):
-    feed = feedparser.parse("https://news.sportbox.ru/rss")
-    if not feed.entries:
+    # язык лида из Telegram (фолбэк ru)
+    lang = (message.from_user.language_code or "ru")[:2]
+    if lang not in ("ru", "es", "ar"):
+        lang = "ru"
+    items = await fetch_sport_news(lang)
+    if not items:
         await message.answer("Новости временно недоступны.")
         return
-    news_list = [f"🔹 {entry.title}\n{entry.link}" for entry in feed.entries[:10]]
-    await message.answer("\n\n".join(news_list), disable_web_page_preview=True)
+    # Отправляем top-5 карточками с фото (с подписью и ссылкой)
+    for it in items[:5]:
+        caption = f"<b>{it['title']}</b>\n\n<a href=\"{it['link']}\">Читать →</a>"
+        try:
+            if it.get("image"):
+                await message.answer_photo(it["image"], caption=caption, parse_mode="HTML")
+            else:
+                await message.answer(caption, parse_mode="HTML", disable_web_page_preview=False)
+        except Exception:
+            await message.answer(caption, parse_mode="HTML", disable_web_page_preview=True)
+
+
+# JSON-эндпоинт для React-компонента News (ключ "news" — как ждёт News.jsx)
+@app.get("/webapp/news")
+async def webapp_news(lang: str = "ru"):
+    if lang not in ("ru", "es", "ar"):
+        lang = "ru"
+    return {"news": await fetch_sport_news(lang)}
 
 @dp.callback_query(lambda c: c.data == "new_analysis")
 async def new_analysis_callback(callback: types.CallbackQuery, state: FSMContext):
@@ -2058,7 +2145,11 @@ async def register_request(
             existing_user.browser = user_agent[:200]
             db.commit()
             return {"status": "ok", "already_exists": True}
-            
+        # ЗАЩИТА: нового лида заводим только с подтверждённым Telegram-паспортом.
+        if telegram_id is None:
+            print(f"🛑 [SECURITY] Отклонена регистрация bet_id={clean_bet_id} без валидного initData (IP={ip_address})")
+            return {"status": "error", "message": "Откройте приложение через Telegram-бота."}
+
         # СЦЕНАРИЙ В: Абсолютно новый пользователь
         new_user = User(
             telegram_id=telegram_id,
