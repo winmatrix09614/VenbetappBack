@@ -75,6 +75,7 @@ from sse_starlette.sse import EventSourceResponse
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
 if not all([BOT_TOKEN, GEMINI_API_KEY, API_FOOTBALL_KEY]):
     print("⚠️ Предупреждение: не все основные переменные окружения заданы. Бот может работать некорректно.")
@@ -86,10 +87,25 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 client = genai.Client(api_key=GEMINI_API_KEY)
 MODEL_NAME = "gemini-2.5-flash"
 
+# ---------- Настройки прогноза ----------
+HOME_BONUS = 24
+DISPLAY_BOOST_BASE = 5
+DISPLAY_BOOST_MAX = 10
+CONFIDENCE_CAP = 95
+SKIP_THRESHOLD = 60
+
+# Поисковый запрос новостей под каждый язык (newsapi.org /everything)
+_NEWS_QUERY = {
+    "ru": "футбол OR спорт",
+    "es": "fútbol OR deporte",
+    "ar": "كرة القدم OR رياضة",
+}
+NEWS_TTL = 1800
+
 # ---------- Кэш ----------
 team_stats_cache = OrderedDict()
 CACHE_TTL = 3600
-news_cache = {"data": [], "last_update": 0}
+news_cache = {}
 NEWS_CACHE_TTL = 1800
 
 # ---------- База данных ----------
@@ -649,7 +665,7 @@ async def generate_prediction_text(team1, team2, data, winner, confidence, addit
    Пиши от первого лица живого эксперта ("Мой анализ показывает…", "Я ожидаю…").
 
 ПРИМЕР ТОНА (только тон, не копируй содержание):
-"Хозяева подходят к матчу в отличной форме и feel себя уверенно на своём поле.
+"Хозяева подходят к матчу в отличной форме и уверенно чувствуют себя на своём поле.
 Их результативность в атаке и солидная игра в обороне дают серьёзное преимущество…"
 """
 
@@ -852,9 +868,6 @@ async def process_match_text(message: types.Message, state: FSMContext):
     await generate_and_send_prediction(message, team1, team2)
     await state.clear()
 
-    news_cache = {}  # { lang: {"data": [...], "ts": float} }
-    NEWS_TTL = 1800  # 30 минут
- 
 async def fetch_sport_news(lang: str = "ru") -> list[dict]:
     """Возвращает список новостей с картинками: [{title, link, image, source}]"""
     now = asyncio.get_event_loop().time()
@@ -866,25 +879,30 @@ async def fetch_sport_news(lang: str = "ru") -> list[dict]:
         return []
  
     params = {
-        "apikey": NEWS_API_KEY,
-        "category": "sports",
-        "language": lang,        # ru / es / ar — совпадает с темами Multi-GEO
-        "image": 1,              # только с картинками
+        "q": _NEWS_QUERY.get(lang, _NEWS_QUERY["ru"]),
+        "language": lang,
+        "sortBy": "publishedAt",
+        "pageSize": 12,
     }
+    headers = {"X-Api-Key": NEWS_API_KEY}
     try:
         async with httpx.AsyncClient(timeout=8.0) as http_client:
-            r = await http_client.get("https://newsdata.io/api/1/latest", params=params)
-            results = r.json().get("results", [])
+            r = await http_client.get("https://newsapi.org/v2/everything", params=params, headers=headers)
+            articles = r.json().get("articles", [])
         items = []
-        for a in results[:10]:
+        for a in articles:
+            if not a.get("title") or a.get("title") == "[Removed]":
+                continue
             items.append({
                 "title": a.get("title"),
-                "link": a.get("link"),
+                "link": a.get("url"),
                 "description": a.get("description"),
-                "image": a.get("image_url"),
-                "pubDate": a.get("pubDate"),
-                "source": a.get("source_id"),
+                "image": a.get("urlToImage"),
+                "pubDate": a.get("publishedAt"),
+                "source": (a.get("source") or {}).get("name"),
             })
+            if len(items) >= 10:
+                break
         news_cache[lang] = {"data": items, "ts": now}
         return items
     except Exception as e:
@@ -2263,36 +2281,6 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         }
     finally:
         db.close()
-
-@app.get("/webapp/news")
-async def webapp_news():
-    current_time = time.time()
-    if current_time - news_cache["last_update"] < NEWS_CACHE_TTL and news_cache["data"]:
-        return {"news": news_cache["data"]}
-    try:
-        rss_url = "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=es-419&gl=US&ceid=US:es-419"
-        feed = feedparser.parse(rss_url)
-        news_list = []
-        for entry in feed.entries[:15]:
-            description = entry.get('summary', entry.get('description', ''))
-            if description:
-                description = re.sub(r'<.*?>', '', description)
-                if len(description) > 120:
-                    description = description[:117] + '...'
-            news_list.append({
-                "title": entry.title,
-                "link": entry.link,
-                "pubDate": entry.get('published', datetime.now().isoformat()),
-                "description": description if description else "Нет описания"
-            })
-        news_cache["data"] = news_list
-        news_cache["last_update"] = current_time
-        return {"news": news_list}
-    except Exception as e:
-        print(f"News error: {e}")
-        if news_cache["data"]:
-            return {"news": news_cache["data"]}
-        return {"news": []}
 
 # ---------- Эндпоинты для фронтенда ----------
 @app.get("/user_status")
