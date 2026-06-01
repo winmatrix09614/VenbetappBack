@@ -1064,6 +1064,14 @@ async def admin_dashboard(
     predictions_today = db.query(PredictionLog).filter(PredictionLog.created_at >= today_start).count()
     pending_count = db.query(User).filter(User.is_active == False, User.is_banned == False).count()
 
+    # Достаем запланированные рассылки
+    pending_broadcasts = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.is_completed == False).order_by(ScheduledBroadcast.scheduled_time.asc()).all()
+    for pb in pending_broadcasts:
+        try:
+            pb.target_count = len(json.loads(pb.user_ids))
+        except:
+            pb.target_count = 0
+
     return templates.TemplateResponse("users.html", {
         "request": request,
         "users": users,
@@ -1080,7 +1088,9 @@ async def admin_dashboard(
         "limit_min": limit_min,
         "limit_max": limit_max,
         "date_filter": date_filter or "",
-        "staff_role": staff.role
+        "staff_role": staff.role,
+        "pending_broadcasts": pending_broadcasts,
+        "scheduled_count": len(pending_broadcasts)
     })
 
 # ---------- Панель Баеров (Аналитика трафика) ----------
@@ -1655,6 +1665,27 @@ async def api_pro_broadcast(
         # Запускаем в фоне прямо сейчас
         asyncio.create_task(run_broadcast_task(u_ids, text, type, delay, staff.id, file_path))
         return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
+        
+        # ---------- Отмена запланированной рассылки ----------
+@app.post("/api/cancel_scheduled")
+async def cancel_scheduled(request: Request, broadcast_id: int = Form(...), db: Session = Depends(get_db)):
+    staff = await get_current_staff(request, db)
+    if not staff or staff.role == "buyer":
+        raise HTTPException(status_code=403)
+    
+    # Ищем рассылку
+    sched = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id, ScheduledBroadcast.is_completed == False).first()
+    if sched:
+        db.delete(sched)
+        db.commit()
+        # Если к ней был прикреплен медиафайл - удаляем его с сервера, чтобы не забивать диск
+        if sched.file_path and os.path.exists(sched.file_path):
+            try:
+                os.remove(sched.file_path)
+            except:
+                pass
+        return {"status": "ok"}
+    return {"status": "error", "message": "Рассылка уже отправлена или не найдена"}
 
 # 4. Эндпоинт для AI Генерации текста (Использует твой Gemini)
 class AIGenerateRequest(BaseModel):

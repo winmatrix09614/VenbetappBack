@@ -146,9 +146,17 @@
             <button type="button" id="massBan" class="btn btn-outline-danger shadow-sm me-2"><i class="bi bi-slash-circle"></i> Забанить</button>
             {% endif %}
         </div>
-        <button type="button" class="btn btn-light shadow-sm fw-bold text-dark rounded-3" data-bs-toggle="modal" data-bs-target="#utmModal">
-            <i class="bi bi-link-45deg fs-5 align-middle"></i> Генератор UTM
-        </button>
+        <div class="d-flex gap-2">
+            {% if scheduled_count > 0 %}
+            <button type="button" class="btn btn-outline-warning shadow-sm fw-bold text-warning rounded-3 px-3" data-bs-toggle="modal" data-bs-target="#scheduledModal">
+                <i class="bi bi-clock-history align-middle me-1"></i> Очередь ({{ scheduled_count }})
+            </button>
+            {% endif %}
+            
+            <button type="button" class="btn btn-light shadow-sm fw-bold text-dark rounded-3" data-bs-toggle="modal" data-bs-target="#utmModal">
+                <i class="bi bi-link-45deg fs-5 align-middle"></i> Генератор UTM
+            </button>
+        </div>
     </div>
 
     <div class="table-responsive shadow-sm rounded-4 border" style="border-color: var(--venbet-border) !important;">
@@ -429,7 +437,47 @@
     </div>
   </div>
 </div>
-
+<div class="modal fade" id="scheduledModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow" style="background-color: var(--venbet-panel);">
+      <div class="modal-header border-bottom" style="border-color: var(--venbet-border) !important;">
+        <h5 class="modal-title fw-bold text-white"><i class="bi bi-clock-history text-warning me-2"></i> Запланированные рассылки</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0 align-middle text-center">
+                <thead style="background-color: #111;">
+                    <tr>
+                        <th class="ps-4 text-start">Запуск (Время сервера)</th>
+                        <th>Аудитория</th>
+                        <th>Формат</th>
+                        <th>Текст (Фрагмент)</th>
+                        <th class="pe-4 text-end">Действие</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in pending_broadcasts %}
+                    <tr>
+                        <td class="ps-4 text-start text-warning fw-bold">{{ b.scheduled_time.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td><span class="badge bg-primary text-black px-2 py-1 fs-6">{{ b.target_count }}</span> чел.</td>
+                        <td><span class="badge bg-secondary text-uppercase">{{ b.msg_type }}</span></td>
+                        <td class="text-truncate text-start" style="max-width: 200px;" title="{{ b.text }}">{{ b.text }}</td>
+                        <td class="pe-4 text-end">
+                            <button class="btn btn-sm btn-outline-danger fw-bold" onclick="cancelBroadcast({{ b.id }})"><i class="bi bi-x-circle me-1"></i> Отменить</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not pending_broadcasts %}
+                    <tr><td colspan="5" class="py-5 text-muted"><i class="bi bi-inbox fs-3 d-block mb-2"></i>Очередь пуста</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <style>
     /* Стили профиля лида сбоку */
     .tracker-offcanvas { background-color: var(--venbet-panel); color: var(--venbet-muted); border-left: 1px solid var(--venbet-border); width: 450px; }
@@ -821,6 +869,26 @@
         }
         if (window.EventSource) connectSSE();
     })();
+// Отмена запланированной рассылки
+    async function cancelBroadcast(id) {
+        if(!confirm('Отменить и удалить эту рассылку из очереди?')) return;
+        
+        const formData = new FormData();
+        formData.append('broadcast_id', id);
+        
+        try {
+            const res = await fetch('/api/cancel_scheduled', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if(data.status === 'ok') {
+                location.reload(); // Перезагружаем страницу, чтобы таблица обновилась
+            } else {
+                alert("Ошибка: " + data.message);
+            }
+        } catch(e) {
+            alert("Ошибка сети при отмене");
+        }
+    }
 
     let currentChart = null;
     function applyCustomDates() {
