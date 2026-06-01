@@ -931,12 +931,6 @@ async def news(message: types.Message):
             await message.answer(caption, parse_mode="HTML", disable_web_page_preview=True)
 
 
-# JSON-эндпоинт для React-компонента News (ключ "news" — как ждёт News.jsx)
-@app.get("/webapp/news")
-async def webapp_news(lang: str = "ru"):
-    if lang not in ("ru", "es", "ar"):
-        lang = "ru"
-    return {"news": await fetch_sport_news(lang)}
 
 @dp.callback_query(lambda c: c.data == "new_analysis")
 async def new_analysis_callback(callback: types.CallbackQuery, state: FSMContext):
@@ -2283,6 +2277,13 @@ async def webapp_predict(user_id: str = Form(...), text: str = Form(None), photo
         db.close()
 
 # ---------- Эндпоинты для фронтенда ----------
+# JSON-эндпоинт для React-компонента News (ключ "news" — как ждёт News.jsx)
+@app.get("/webapp/news")
+async def webapp_news(lang: str = "ru"):
+    if lang not in ("ru", "es", "ar"):
+        lang = "ru"
+    return {"news": await fetch_sport_news(lang)}
+
 @app.get("/user_status")
 async def user_status(bet_id: str):
     db = SessionLocal()
