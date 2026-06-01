@@ -462,9 +462,14 @@
                         <td class="ps-4 text-start text-warning fw-bold">{{ b.scheduled_time.strftime('%d.%m.%Y %H:%M') }}</td>
                         <td><span class="badge bg-primary text-black px-2 py-1 fs-6">{{ b.target_count }}</span> чел.</td>
                         <td><span class="badge bg-secondary text-uppercase">{{ b.msg_type }}</span></td>
-                        <td class="text-truncate text-start" style="max-width: 200px;" title="{{ b.text }}">{{ b.text }}</td>
-                        <td class="pe-4 text-end">
-                            <button class="btn btn-sm btn-outline-danger fw-bold" onclick="cancelBroadcast({{ b.id }})"><i class="bi bi-x-circle me-1"></i> Отменить</button>
+                        <td class="text-truncate text-start" style="max-width: 200px;">{{ b.text }}</td>
+                        <td class="pe-4 text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-info fw-bold me-2" onclick="showScheduledPreview(this)" data-text="{{ b.text }}" data-type="{{ b.msg_type }}">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger fw-bold" onclick="cancelBroadcast({{ b.id }})">
+                                <i class="bi bi-x-circle me-1"></i> Отменить
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -474,6 +479,20 @@
                 </tbody>
             </table>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="previewScheduledModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="background-color: #1a1a1a; border: 1px solid var(--venbet-border) !important;">
+      <div class="modal-header border-bottom" style="border-color: #333 !important;">
+        <h6 class="modal-title fw-bold text-white"><i class="bi bi-eye text-info me-2"></i> Содержимое рассылки</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="mb-3 text-muted small fw-bold text-uppercase">Формат: <span id="previewTypeBadge" class="badge bg-secondary ms-2">TEXT</span></div>
+        <div class="p-3 rounded-3" style="background-color: #0f0f0f; border: 1px solid #333; color: white; white-space: pre-wrap; font-size: 14px;" id="previewTextContent"></div>
       </div>
     </div>
   </div>
@@ -888,6 +907,19 @@
         } catch(e) {
             alert("Ошибка сети при отмене");
         }
+    }
+    // Открытие окна предпросмотра
+    function showScheduledPreview(btn) {
+        // Берем данные из кнопки (защита от сломанных кавычек в тексте)
+        const text = btn.getAttribute('data-text');
+        const type = btn.getAttribute('data-type');
+        
+        // Вставляем данные в модалку
+        document.getElementById('previewTextContent').innerText = text;
+        document.getElementById('previewTypeBadge').innerText = type.toUpperCase();
+        
+        // Открываем модалку предпросмотра
+        new bootstrap.Modal(document.getElementById('previewScheduledModal')).show();
     }
 
     let currentChart = null;
