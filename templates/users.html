@@ -567,16 +567,20 @@
     document.getElementById('perPageSelect').addEventListener('change',function(){let url=new URL(window.location.href);url.searchParams.set('per_page',this.value);url.searchParams.set('page',1);window.location.href=url.toString();});
 
     // UTM Генератор
+    // UTM Генератор (Прямые ссылки для WebApp)
     function generateLink() {
         const bot = document.getElementById('botUsername').value.replace('@', '').trim();
         let campaign = document.getElementById('campaignName').value.trim();
         campaign = campaign.replace(/[^a-zA-Z0-9_-]/g, '');
         document.getElementById('campaignName').value = campaign;
-        const link = campaign ? `https://t.me/${bot}?start=${campaign}` : `https://t.me/${bot}`;
+        
+        // ВАЖНО: Укажи здесь короткое имя твоего WebApp из BotFather (обычно это app)
+        const appShortName = "app"; 
+        
+        // Формируем Direct Mini App Link с параметром startapp
+        const link = campaign ? `https://t.me/${bot}/${appShortName}?startapp=${campaign}` : `https://t.me/${bot}/${appShortName}`;
+        
         document.getElementById('resultLink').innerText = link;
-    }
-    function copyLink() {
-        navigator.clipboard.writeText(document.getElementById('resultLink').innerText).then(() => alert('Ссылка скопирована!'));
     }
 
     // Профиль Лида
