@@ -673,8 +673,9 @@ async def generate_prediction_text(team1, team2, data, winner, confidence, addit
 
     config = genai_types.GenerateContentConfig(
         temperature=0.75,
-        max_output_tokens=1500,  # запас, чтобы "thinking" не съедал ответ и текст не обрывался
+        max_output_tokens=1500,
         top_p=0.9,
+        thinking_config=genai_types.ThinkingConfig(thinking_budget=0),  # отключаем "размышления", чтобы весь бюджет токенов шёл в ответ
     )
 
     for attempt in range(3):

@@ -590,6 +590,26 @@
         if (el.tagName === 'A') el.setAttribute('href', link);
     }
 
+    function copyLink() {
+        const link = document.getElementById('resultLink').innerText;
+        const done = () => {
+            const btn = (window.event && window.event.target) ? window.event.target.closest('button') : null;
+            if (btn) {
+                const html = btn.innerHTML;
+                btn.innerHTML = '<i class="bi bi-check2 me-2"></i> Скопировано';
+                setTimeout(() => { btn.innerHTML = html; }, 1500);
+            }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).then(done).catch(done);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = link; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta); done();
+        }
+    }
+
     // Профиль Лида
     document.querySelectorAll('.open-profile').forEach(btn => {
         btn.addEventListener('click', async function() {
