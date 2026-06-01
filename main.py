@@ -192,6 +192,21 @@ class BroadcastLog(Base):
 
 Base.metadata.create_all(bind=engine)
 
+class ScheduledBroadcast(Base):
+    __tablename__ = "scheduled_broadcasts"
+    id = Column(Integer, primary_key=True, index=True)
+    staff_id = Column(Integer, ForeignKey("staff.id"))
+    user_ids = Column(Text) # Сохраняем массив ID в виде JSON строки
+    text = Column(Text)
+    msg_type = Column(String)
+    delay = Column(Float, default=0.0)
+    file_path = Column(String, nullable=True) # Путь к загруженному медиа
+    scheduled_time = Column(DateTime) # Время запуска (в UTC)
+    is_completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    staff = relationship("Staff")
+
 # --- АВТО-МИГРАЦИЯ ДЛЯ POSTGRESQL (Этап 3 и 4) ---
 from sqlalchemy.sql import text
 
@@ -1590,7 +1605,7 @@ async def broadcast_logs_page(request: Request, db: Session = Depends(get_db)):
     logs = db.query(BroadcastLog).options(joinedload(BroadcastLog.staff)).order_by(BroadcastLog.created_at.desc()).limit(50).all()
     return templates.TemplateResponse("broadcast_logs.html", {"request": request, "logs": logs, "staff_role": staff.role})
 
-# 3. Эндпоинт запуска рассылки (Теперь принимает FormData с файлом)
+# 3. Эндпоинт запуска рассылки (Теперь с Планировщиком)
 @app.post("/api/pro_broadcast")
 async def api_pro_broadcast(
     request: Request, 
@@ -1598,6 +1613,7 @@ async def api_pro_broadcast(
     text: str = Form(""), 
     type: str = Form("text"), 
     delay: float = Form(0.0), 
+    scheduled_time: str = Form(None), # <-- НОВОЕ ПОЛЕ (UTC строка)
     media_file: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
@@ -1613,18 +1629,31 @@ async def api_pro_broadcast(
     file_path = None
     if type != "text" and media_file:
         os.makedirs("uploads", exist_ok=True)
-        # Генерируем уникальное имя файла, чтобы избежать конфликтов при 2+ одновременных рассылках
         ext = media_file.filename.split('.')[-1]
         file_path = f"uploads/{uuid.uuid4().hex}.{ext}"
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(media_file.file, buffer)
             
-    # Запускаем в фоне
-    asyncio.create_task(run_broadcast_task(u_ids, text, type, delay, staff.id, file_path))
-    return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
-    
-class AIGenerateRequest(BaseModel):
-    prompt: str
+    if scheduled_time:
+        # Конвертируем строку из фронтенда в Python datetime (UTC)
+        dt_utc = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00')).replace(tzinfo=None)
+        
+        new_scheduled = ScheduledBroadcast(
+            staff_id=staff.id,
+            user_ids=user_ids, # Кладем JSON строку
+            text=text,
+            msg_type=type,
+            delay=delay,
+            file_path=file_path,
+            scheduled_time=dt_utc
+        )
+        db.add(new_scheduled)
+        db.commit()
+        return {"status": "ok", "message": "Рассылка успешно запланирована!"}
+    else:
+        # Запускаем в фоне прямо сейчас
+        asyncio.create_task(run_broadcast_task(u_ids, text, type, delay, staff.id, file_path))
+        return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
 
 # 4. Эндпоинт для AI Генерации текста (Использует твой Gemini)
 @app.post("/api/generate_ai_message")
@@ -2162,6 +2191,32 @@ async def user_history(bet_id: str):
         db.close()
 
 # ---------- Запуск ----------
+
+# Функция планировщика (проверяет базу раз в минуту)
+async def scheduler_loop():
+    while True:
+        try:
+            db = SessionLocal()
+            now = datetime.utcnow()
+            # Ищем невыполненные рассылки, чье время уже пришло
+            pending = db.query(ScheduledBroadcast).filter(
+                ScheduledBroadcast.is_completed == False,
+                ScheduledBroadcast.scheduled_time <= now
+            ).all()
+
+            for pb in pending:
+                pb.is_completed = True
+                db.commit()
+                # Распаковываем юзеров и запускаем стандартную рассылку
+                u_ids = json.loads(pb.user_ids)
+                asyncio.create_task(run_broadcast_task(u_ids, pb.text, pb.msg_type, pb.delay, pb.staff_id, pb.file_path))
+        except Exception as e:
+            print(f"[SCHEDULER ERROR] {e}")
+        finally:
+            db.close()
+            
+        await asyncio.sleep(60) # Спим 60 секунд до следующей проверки
+
 async def start_bot():
     await bot.delete_webhook()
     await dp.start_polling(bot)
@@ -2173,6 +2228,7 @@ async def run_fastapi():
     await server.serve()
 
 async def main():
+    asyncio.create_task(scheduler_loop()) # <-- ЗАПУСКАЕМ НАШ ПЛАНИРОВЩИК
     await asyncio.gather(start_bot(), run_fastapi())
 
 if __name__ == "__main__":

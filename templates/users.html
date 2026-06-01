@@ -376,6 +376,17 @@
             <input type="range" class="form-range" min="0" max="60" value="0" id="delaySlider" oninput="updateDelayLabel(this.value)">
         </div>
 
+        <div class="mb-4 p-3 rounded-3" style="background-color: #050505; border: 1px solid var(--venbet-border);">
+            <div class="form-check form-switch mb-0 d-flex align-items-center justify-content-between p-0">
+                <label class="form-check-label fw-bold text-white mb-0" for="scheduleSwitch"><i class="bi bi-clock me-2 text-primary"></i>Запланировать отправку</label>
+                <input class="form-check-input ms-0 mt-0" type="checkbox" id="scheduleSwitch" style="cursor: pointer;" onchange="document.getElementById('scheduleTimeWrapper').classList.toggle('d-none')">
+            </div>
+            <div id="scheduleTimeWrapper" class="d-none mt-3">
+                <input type="datetime-local" id="scheduleTime" class="form-control bg-dark border-secondary text-white shadow-none">
+                <div class="form-text text-muted small mt-1">Укажите ваше локальное время. Сервер сам рассчитает нужную паузу.</div>
+            </div>
+        </div>
+
         <div class="mt-4 pt-3">
             <button class="btn btn-primary w-100 fw-bold py-3 fs-6 rounded-3" onclick="startProBroadcast()">
                 Create
@@ -594,9 +605,11 @@
         
         // Принудительно прячем нижнюю плашку перед открытием панели
         const bar = document.getElementById('stickyActionBar');
-        bar.style.opacity = '0';
-        bar.style.pointerEvents = 'none';
-        bar.style.transform = 'translate(-50%, 20px)';
+        if(bar) {
+            bar.style.opacity = '0';
+            bar.style.pointerEvents = 'none';
+            bar.style.transform = 'translate(-50%, 20px)';
+        }
         
         new bootstrap.Offcanvas(document.getElementById('proBroadcastCanvas')).show();
     }
@@ -643,7 +656,7 @@
         }
     }
 
-    // --- 1. ЗАПУСК РАССЫЛКИ (С поддержкой медиа) ---
+    // --- 1. ЗАПУСК ИЛИ ПЛАНИРОВАНИЕ РАССЫЛКИ ---
     async function startProBroadcast() {
         const userIds = getSelectedIds();
         const text = document.getElementById('broadcastText').value.trim();
@@ -651,43 +664,54 @@
         const delay = parseFloat(document.getElementById('delaySlider').value);
         const fileInput = document.getElementById('pushMedia');
         
+        const isScheduled = document.getElementById('scheduleSwitch').checked;
+        const scheduleInput = document.getElementById('scheduleTime').value;
+        
         if (userIds.length === 0) return alert("Аудитория пуста. Выберите пользователей в таблице.");
         if (type === 'text' && !text) return alert("Введите текст сообщения!");
         if (type !== 'text' && (!fileInput.files || fileInput.files.length === 0)) return alert("Прикрепите файл для рассылки!");
+        if (isScheduled && !scheduleInput) return alert("Выберите дату и время для отложенной рассылки!");
+
+        // Конвертация локального времени менеджера в UTC для сервера
+        let scheduledTimeUtc = "";
+        if (isScheduled) {
+            const localDate = new Date(scheduleInput);
+            if (localDate <= new Date()) return alert("Время должно быть в будущем!");
+            scheduledTimeUtc = localDate.toISOString(); // Формат: 2026-06-01T15:30:00.000Z
+        }
         
-        if (!confirm(`Запустить фоновую рассылку для ${userIds.length} пользователей?`)) return;
+        if (!confirm(isScheduled ? `Запланировать рассылку для ${userIds.length} юзеров?` : `Запустить фоновую рассылку для ${userIds.length} пользователей?`)) return;
         
-        // Меняем кнопку на загрузку
         const btn = event.target;
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Запуск...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Обработка...';
         btn.disabled = true;
 
-        // Упаковываем данные и файл в формат multipart/form-data
         const formData = new FormData();
         formData.append('user_ids', JSON.stringify(userIds));
         formData.append('text', text);
         formData.append('type', type);
         formData.append('delay', delay);
-        if (type !== 'text' && fileInput.files[0]) {
-            formData.append('media_file', fileInput.files[0]);
-        }
+        if (scheduledTimeUtc) formData.append('scheduled_time', scheduledTimeUtc);
+        if (type !== 'text' && fileInput.files[0]) formData.append('media_file', fileInput.files[0]);
 
         try {
-            const res = await fetch('/api/pro_broadcast', {
-                method: 'POST',
-                body: formData // ВАЖНО: При отправке FormData браузер сам прописывает правильные заголовки
-            });
+            const res = await fetch('/api/pro_broadcast', { method: 'POST', body: formData });
             const data = await res.json();
             
             if (data.status === 'ok') {
-                alert("🚀 Рассылка успешно отправлена в фоновую очередь сервера!");
+                alert("🚀 " + data.message);
                 bootstrap.Offcanvas.getInstance(document.getElementById('proBroadcastCanvas')).hide();
                 clearSelection(); 
                 
-                // Очищаем форму от старого файла
-                fileInput.value = "";
-                document.getElementById('mediaFileName').innerText = "Нажмите, чтобы выбрать файл";
+                // Сброс формы
+                if(fileInput) fileInput.value = "";
+                const mfName = document.getElementById('mediaFileName');
+                if(mfName) mfName.innerText = "Нажмите, чтобы выбрать файл";
+                
+                document.getElementById('scheduleSwitch').checked = false;
+                document.getElementById('scheduleTimeWrapper').classList.add('d-none');
+                document.getElementById('scheduleTime').value = "";
             } else {
                 alert("Ошибка: " + data.message);
             }
