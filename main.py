@@ -1656,6 +1656,9 @@ async def api_pro_broadcast(
         return {"status": "ok", "message": "Рассылка запущена в фоновом режиме!"}
 
 # 4. Эндпоинт для AI Генерации текста (Использует твой Gemini)
+class AIGenerateRequest(BaseModel):
+    prompt: str
+
 @app.post("/api/generate_ai_message")
 async def generate_ai_message(payload: AIGenerateRequest, request: Request, db: Session = Depends(get_db)):
     staff = await get_current_staff(request, db)
